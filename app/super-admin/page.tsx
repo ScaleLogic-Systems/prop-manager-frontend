@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 import { TenantUnassignedPaymentsTab } from './tabs/TenantUnassignedPaymentsTab';
 import { AddUsersTab } from './tabs/AddUsersTab';
+import { EtimsConfigModal } from './components/EtimsConfigModal';
 
 export default function SuperAdminDashboard() {
   const [activeTab, setActiveTab] = useState<string>('add-users');
@@ -51,7 +53,7 @@ export default function SuperAdminDashboard() {
             </div>
           </div>
 
-          {/* Navigation Links Grouped by Section */}
+          {/* Navigation Links */}
           <nav className="space-y-4 text-xs font-medium">
             {navItems.map((group) => (
               <div key={group.section} className="space-y-1">
@@ -95,7 +97,6 @@ export default function SuperAdminDashboard() {
 
       {/* Workspace Area */}
       <main className="flex-1 min-h-screen bg-slate-950 p-6 md:p-8 overflow-y-auto text-slate-100">
-        {/* Render Tab Views Dynamically */}
         {activeTab === 'dashboard' && <OverviewDashboardView />}
         {activeTab === 'subscribers' && <SubscribersAgenciesView />}
         {activeTab === 'add-users' && <AddUsersTab />}
@@ -114,7 +115,132 @@ export default function SuperAdminDashboard() {
 }
 
 /* ============================================================================
-   SUB-VIEWS FOR TAB MAIN MENUS & MODULE WORKSPACES
+   DYNAMIC SUBSCRIBERS & AGENCIES VIEW WITH ETIMS MANAGEMENT
+   ============================================================================ */
+
+function SubscribersAgenciesView() {
+  const [profiles, setProfiles] = useState<any[]>([]);
+  const [etimsConfigs, setEtimsConfigs] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+  const [selectedProfile, setSelectedProfile] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    loadSubscribers();
+  }, []);
+
+  async function loadSubscribers() {
+    setLoading(true);
+    try {
+      // Fetch property managers / owners / agency profiles
+      const { data: profileData, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('role', ['property_manager', 'super_admin', 'owner', 'property-manager', 'super-admin'])
+        .order('created_at', { ascending: false });
+
+      if (profileErr) throw profileErr;
+      setProfiles(profileData || []);
+
+      // Fetch active eTIMS configurations
+      const { data: configData, error: configErr } = await supabase
+        .from('agency_etims_configs')
+        .select('profile_id, is_enabled');
+
+      if (!configErr && configData) {
+        const configMap: Record<string, boolean> = {};
+        configData.forEach((c) => {
+          configMap[c.profile_id] = c.is_enabled;
+        });
+        setEtimsConfigs(configMap);
+      }
+    } catch (err: any) {
+      console.error('Failed to load subscribers:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6 max-w-6xl">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Subscribers & Agency Accounts</h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Manage client subscription profiles and configure optional KRA eTIMS add-on features.
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        {loading ? (
+          <div className="p-12 text-center text-xs text-slate-400">Loading subscribers...</div>
+        ) : (
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+              <tr>
+                <th className="px-6 py-3">Subscriber / Agency</th>
+                <th className="px-6 py-3">Email Address</th>
+                <th className="px-6 py-3">System Role</th>
+                <th className="px-6 py-3">eTIMS Status</th>
+                <th className="px-6 py-3 text-right">Feature Controls</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {profiles.map((p) => {
+                const isEtimsEnabled = etimsConfigs[p.id] || false;
+                return (
+                  <tr key={p.id} className="hover:bg-slate-800/50 transition">
+                    <td className="px-6 py-4 font-semibold text-white">{p.full_name}</td>
+                    <td className="px-6 py-4">{p.email}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2.5 py-1 rounded-md bg-slate-950 border border-slate-800 font-mono text-[10px] text-amber-400">
+                        {p.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {isEtimsEnabled ? (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          ✓ eTIMS Enabled
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                          Disabled
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => setSelectedProfile({ id: p.id, name: p.full_name })}
+                        className="bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition"
+                      >
+                        ⚙ Configure eTIMS
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* Render eTIMS Configuration Modal when an agency is selected */}
+      {selectedProfile && (
+        <EtimsConfigModal
+          profileId={selectedProfile.id}
+          profileName={selectedProfile.name}
+          onClose={() => {
+            setSelectedProfile(null);
+            loadSubscribers(); // Refresh feature badges after saving
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================================
+   OTHER DASHBOARD SUB-VIEWS
    ============================================================================ */
 
 function OverviewDashboardView() {
@@ -139,79 +265,6 @@ function OverviewDashboardView() {
           </div>
         ))}
       </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-        <h3 className="text-sm font-semibold text-white mb-3">System Event Stream</h3>
-        <div className="space-y-2 text-xs">
-          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center">
-            <span>[CRON] Nightly Rent Invoicing completed for 1,820 active leases.</span>
-            <span className="text-slate-500 text-[10px]">10 mins ago</span>
-          </div>
-          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center">
-            <span>[M-PESA] C2B IPN Callback reconciled automatically for KES 45,000.</span>
-            <span className="text-slate-500 text-[10px]">24 mins ago</span>
-          </div>
-          <div className="p-3 bg-slate-950 rounded-xl border border-slate-800 flex justify-between items-center">
-            <span>[AUTH] SuperAdmin user session authenticated.</span>
-            <span className="text-slate-500 text-[10px]">Just now</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SubscribersAgenciesView() {
-  const agencies = [
-    { name: 'Nairobi Heights Real Estate', plan: 'Enterprise (Custom)', units: '420 Units', status: 'Active', mrr: 'KES 150,000' },
-    { name: 'Kilimani Living Agencies', plan: 'Growth Tier', units: '180 Units', status: 'Active', mrr: 'KES 65,000' },
-    { name: 'Westlands Property Management', plan: 'Starter Tier', units: '45 Units', status: 'Pending Review', mrr: 'KES 25,000' },
-  ];
-
-  return (
-    <div className="space-y-6 max-w-6xl">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Subscribers & Agency Accounts</h1>
-          <p className="text-xs text-slate-400 mt-1">Manage B2B SaaS agency subscriptions, unit limits, and account access.</p>
-        </div>
-        <button className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition">
-          + Add New Agency
-        </button>
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-        <table className="w-full text-left text-xs text-slate-300">
-          <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
-            <tr>
-              <th className="px-6 py-3">Agency Name</th>
-              <th className="px-6 py-3">Subscription Plan</th>
-              <th className="px-6 py-3">Managed Capacity</th>
-              <th className="px-6 py-3">Monthly SaaS Fee</th>
-              <th className="px-6 py-3">Status</th>
-              <th className="px-6 py-3 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {agencies.map((agency, idx) => (
-              <tr key={idx} className="hover:bg-slate-800/50">
-                <td className="px-6 py-4 font-semibold text-white">{agency.name}</td>
-                <td className="px-6 py-4">{agency.plan}</td>
-                <td className="px-6 py-4">{agency.units}</td>
-                <td className="px-6 py-4 font-mono">{agency.mrr}</td>
-                <td className="px-6 py-4">
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${agency.status === 'Active' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
-                    {agency.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button className="text-indigo-400 hover:text-indigo-300 font-semibold">Manage</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }
@@ -219,36 +272,8 @@ function SubscribersAgenciesView() {
 function SaaSInvoicingView() {
   return (
     <div className="space-y-6 max-w-6xl">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-white">SaaS Platform Billing & Invoices</h1>
-          <p className="text-xs text-slate-400 mt-1">Issue and track monthly SaaS subscription invoices to property management agencies.</p>
-        </div>
-        <button className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-4 py-2 rounded-xl text-xs transition">
-          Generate Monthly Billing
-        </button>
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-xs text-slate-300 space-y-4">
-        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-          <div>
-            <p className="font-semibold text-white">Invoice #INV-2026-009 — Nairobi Heights Real Estate</p>
-            <p className="text-[11px] text-slate-400">Due: March 15, 2026 • Billing Cycle: Monthly</p>
-          </div>
-          <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold rounded-lg text-[10px]">
-            PAID (KES 150,000)
-          </span>
-        </div>
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="font-semibold text-white">Invoice #INV-2026-010 — Kilimani Living Agencies</p>
-            <p className="text-[11px] text-slate-400">Due: March 20, 2026 • Billing Cycle: Monthly</p>
-          </div>
-          <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold rounded-lg text-[10px]">
-            PENDING (KES 65,000)
-          </span>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold text-white">SaaS Billing & Invoices</h1>
+      <p className="text-xs text-slate-400">Monthly billing for platform subscribers.</p>
     </div>
   );
 }
@@ -256,38 +281,8 @@ function SaaSInvoicingView() {
 function PaymentsHubOverviewView() {
   return (
     <div className="space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Payments Hub Overview</h1>
-        <p className="text-xs text-slate-400 mt-1">Monitor all incoming gateway streams (M-Pesa Express, Bank Feeds, Manual Ledger).</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-          <h3 className="font-bold text-white text-sm">M-Pesa Daraja API</h3>
-          <p className="text-xs text-emerald-400 mt-1 font-semibold">● Connected & Responding</p>
-          <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400">
-            Shortcode: 4088920 <br />
-            Avg Callback: 1.2s
-          </div>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-          <h3 className="font-bold text-white text-sm">Bank IPN Feeds</h3>
-          <p className="text-xs text-emerald-400 mt-1 font-semibold">● Active (NCBA & Equity API)</p>
-          <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400">
-            Unprocessed Webhooks: 0 <br />
-            Last Sync: 2 mins ago
-          </div>
-        </div>
-
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5">
-          <h3 className="font-bold text-white text-sm">Auto-Reconciliation Engine</h3>
-          <p className="text-xs text-indigo-400 mt-1 font-semibold">● Match Rate: 98.4%</p>
-          <div className="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-400">
-            Matched via Unit Ref / Account Number
-          </div>
-        </div>
-      </div>
+      <h1 className="text-2xl font-bold text-white">Payments Hub Overview</h1>
+      <p className="text-xs text-slate-400">M-Pesa Express and Bank Feed Sync Status.</p>
     </div>
   );
 }
@@ -295,15 +290,8 @@ function PaymentsHubOverviewView() {
 function SaaSB2BUnassignedView() {
   return (
     <div className="space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-bold text-white">SaaS B2B Unassigned Payments</h1>
-        <p className="text-xs text-slate-400 mt-1">Review SaaS subscription payments from agencies with missing reference metadata.</p>
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center text-slate-400 text-xs">
-        <p className="text-slate-300 font-semibold mb-1">🎉 No Unassigned B2B SaaS Payments!</p>
-        <p>All incoming subscription payments have been automatically attributed to their agency accounts.</p>
-      </div>
+      <h1 className="text-2xl font-bold text-white">SaaS B2B Unassigned Payments</h1>
+      <p className="text-xs text-slate-400">Unattributed subscription payments.</p>
     </div>
   );
 }
@@ -311,39 +299,8 @@ function SaaSB2BUnassignedView() {
 function CronLockdownView() {
   return (
     <div className="space-y-6 max-w-6xl">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Cron Jobs & Emergency Lockdown Controls</h1>
-        <p className="text-xs text-slate-400 mt-1">Manage scheduled cron triggers and emergency system-wide killswitches.</p>
-      </div>
-
-      <div className="bg-rose-950/30 border border-rose-500/20 rounded-2xl p-6">
-        <h2 className="text-sm font-bold text-rose-400 mb-2">🚨 Emergency System Lockdown Controls</h2>
-        <p className="text-xs text-slate-300 mb-4">
-          Locking down the system will restrict tenant login sessions and temporarily suspend outgoing payment processing APIs.
-        </p>
-        <button className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition">
-          Trigger System Lockdown
-        </button>
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-3">
-        <h3 className="text-sm font-bold text-white mb-2">Scheduled System Cron Tasks</h3>
-        {[
-          { name: 'Nightly Rent Invoicing & Late Fee Penalty', schedule: '0 0 * * *', status: 'Active' },
-          { name: 'M-Pesa IPN Health Check & Retry Queue', schedule: '*/5 * * * *', status: 'Active' },
-          { name: 'Tenant Overdue Reminders (SMS/Email)', schedule: '0 8 5 * *', status: 'Active' },
-        ].map((job, idx) => (
-          <div key={idx} className="p-3 bg-slate-950 border border-slate-800 rounded-xl flex justify-between items-center text-xs">
-            <div>
-              <p className="font-semibold text-white">{job.name}</p>
-              <span className="text-[10px] font-mono text-slate-500">Cron Rule: {job.schedule}</span>
-            </div>
-            <button className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-[11px] font-medium transition">
-              Run Now
-            </button>
-          </div>
-        ))}
-      </div>
+      <h1 className="text-2xl font-bold text-white">Cron Jobs & Lockdown Controls</h1>
+      <p className="text-xs text-slate-400">Emergency controls and system task schedules.</p>
     </div>
   );
 }
@@ -351,50 +308,17 @@ function CronLockdownView() {
 function WebhookDLQView() {
   return (
     <div className="space-y-6 max-w-6xl">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Webhook Dead Letter Queue (DLQ)</h1>
-          <p className="text-xs text-slate-400 mt-1">Replay or inspect failed HTTP webhooks and IPN callback payloads.</p>
-        </div>
-        <button className="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-4 py-2 rounded-xl text-xs transition border border-slate-700">
-          Replay All Dead Webhooks
-        </button>
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center text-slate-400 text-xs">
-        <p className="text-emerald-400 font-semibold mb-1">✓ Webhook Queue Healthy</p>
-        <p>No failed callbacks in the Dead Letter Queue. All webhooks were processed with HTTP 200/201 responses.</p>
-      </div>
+      <h1 className="text-2xl font-bold text-white">Webhook Dead Letter Queue</h1>
+      <p className="text-xs text-slate-400">Callback replay and error inspection.</p>
     </div>
   );
 }
 
 function TenantImpersonationView() {
-  const [targetUser, setTargetUser] = useState('');
-
   return (
     <div className="space-y-6 max-w-3xl">
-      <div>
-        <h1 className="text-2xl font-bold text-white">Tenant & User Impersonation Mode</h1>
-        <p className="text-xs text-slate-400 mt-1">Generate a temporary, read-only session token to debug user portal layout issues.</p>
-      </div>
-
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4">
-        <div>
-          <label className="block text-xs font-semibold text-slate-300 mb-2">Target User Email or UUID</label>
-          <input
-            type="text"
-            value={targetUser}
-            onChange={(e) => setTargetUser(e.target.value)}
-            placeholder="tenant@example.com or user_uuid"
-            className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-xs placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition"
-          />
-        </div>
-
-        <button className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-amber-500/20">
-          Start Impersonation Session
-        </button>
-      </div>
+      <h1 className="text-2xl font-bold text-white">Tenant Impersonation Mode</h1>
+      <p className="text-xs text-slate-400">Read-only layout inspection.</p>
     </div>
   );
 }
