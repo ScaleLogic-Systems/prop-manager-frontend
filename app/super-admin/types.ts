@@ -6,17 +6,23 @@ export type SuperadminTab =
   | 'subscribers'
   | 'add-users'
   | 'generate-invoice'
+  | 'saas-invoicing'
   // Reconciliation Hubs
+  | 'payments-overview'
   | 'unassigned-payments'
   | 'unassigned-payments-hub'
   | 'saas-unassigned-payments'
-  | 'tenant-unassigned-payments'
   | 'unassigned-saas-payments'
+  | 'saas-b2b-unassigned'
+  | 'tenant-unassigned-payments'
   | 'unassigned-tenant-payments'
   // Technical & Developer Controls
   | 'system-control'
+  | 'cron-lockdown'
   | 'webhook-debugger'
+  | 'webhook-dlq'
   | 'impersonator'
+  | 'tenant-impersonation'
   // Governance & Feature Control
   | 'audit-logs'
   | 'feature-flags';
