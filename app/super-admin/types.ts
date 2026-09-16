@@ -7,6 +7,7 @@ export type SuperadminTab =
   | 'add-users'
   | 'generate-invoice'
   | 'saas-invoicing'
+  | 'kra-etims'
   // Reconciliation Hubs
   | 'payments-overview'
   | 'unassigned-payments'

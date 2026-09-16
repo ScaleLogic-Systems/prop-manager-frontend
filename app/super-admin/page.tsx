@@ -1,121 +1,172 @@
+// app/super-admin/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import { Sidebar } from './components/Sidebar';
 import { TenantUnassignedPaymentsTab } from './tabs/TenantUnassignedPaymentsTab';
 import { AddUsersTab } from './tabs/AddUsersTab';
 import { EtimsConfigModal } from './components/EtimsConfigModal';
+import { SuperadminTab } from './types';
 
 export default function SuperAdminDashboard() {
-  const [activeTab, setActiveTab] = useState<string>('add-users');
-
-  const navItems = [
-    {
-      section: 'OPERATIONS & SAAS MANAGEMENT',
-      items: [
-        { id: 'dashboard', label: 'Overview Dashboard', icon: '📊' },
-        { id: 'subscribers', label: 'Subscribers & Agencies', icon: '🏢' },
-        { id: 'add-users', label: 'User Onboarding', icon: '👤+' },
-        { id: 'saas-invoicing', label: 'SaaS Invoicing', icon: '📄' },
-      ],
-    },
-    {
-      section: 'RECONCILIATION HUB',
-      items: [
-        { id: 'payments-overview', label: 'Payments Hub Overview', icon: '💳' },
-        { id: 'saas-b2b-unassigned', label: 'SaaS B2B Unassigned', icon: '🏛️' },
-        { id: 'tenant-unassigned-payments', label: 'Tenant Rent Unassigned', icon: '💵' },
-      ],
-    },
-    {
-      section: 'TECHNICAL & GOD-MODE CONTROLS',
-      items: [
-        { id: 'cron-lockdown', label: 'Cron & Emergency Lockdown', icon: '⏰' },
-        { id: 'webhook-dlq', label: 'Webhook DLQ & Replay', icon: '🔄' },
-        { id: 'tenant-impersonation', label: 'Tenant Impersonation', icon: '👥' },
-      ],
-    },
-  ];
+  const [activeTab, setActiveTab] = useState<SuperadminTab>('add-users');
 
   return (
     <div className="min-h-screen w-full bg-slate-950 text-slate-100 flex flex-col md:flex-row">
       {/* Sidebar Navigation */}
-      <aside className="w-full md:w-64 bg-slate-900 border-b md:border-b-0 md:border-r border-slate-800 shrink-0 flex flex-col justify-between p-4 z-20 overflow-y-auto">
-        <div>
-          {/* Logo / Branding */}
-          <div className="flex items-center space-x-3 px-3 py-3 border-b border-slate-800 mb-4">
-            <div className="w-8 h-8 rounded-xl bg-amber-500 flex items-center justify-center font-bold text-slate-950 shadow-lg shadow-amber-500/20">
-              👑
-            </div>
-            <div>
-              <h2 className="font-bold text-sm text-white tracking-wide">PropManager HQ</h2>
-              <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Superadmin Portal</p>
-            </div>
-          </div>
-
-          {/* Navigation Links */}
-          <nav className="space-y-4 text-xs font-medium">
-            {navItems.map((group) => (
-              <div key={group.section} className="space-y-1">
-                <div className="px-3 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  {group.section}
-                </div>
-                {group.items.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl transition text-left ${
-                      activeTab === item.id
-                        ? 'bg-amber-500 text-slate-950 font-bold shadow-md shadow-amber-500/20'
-                        : 'text-slate-400 hover:bg-slate-800/80 hover:text-slate-200'
-                    }`}
-                  >
-                    <span className="text-sm">{item.icon}</span>
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            ))}
-          </nav>
-        </div>
-
-        {/* Footer */}
-        <div className="pt-4 border-t border-slate-800 px-3 py-2 text-xs flex flex-col space-y-2">
-          <div className="flex items-center justify-between text-slate-400">
-            <span className="truncate text-[11px]">admin@propmanager.co.ke</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20"></span>
-          </div>
-          <button
-            onClick={() => console.log('Sign out')}
-            className="w-full flex items-center space-x-2 px-2 py-1.5 text-slate-400 hover:text-rose-400 text-left transition rounded-lg hover:bg-slate-800/50"
-          >
-            <span>🚪</span>
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </aside>
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
       {/* Workspace Area */}
       <main className="flex-1 min-h-screen bg-slate-950 p-6 md:p-8 overflow-y-auto text-slate-100">
         {activeTab === 'dashboard' && <OverviewDashboardView />}
         {activeTab === 'subscribers' && <SubscribersAgenciesView />}
         {activeTab === 'add-users' && <AddUsersTab />}
-        {activeTab === 'saas-invoicing' && <SaaSInvoicingView />}
-        {activeTab === 'payments-overview' && <PaymentsHubOverviewView />}
-        {activeTab === 'saas-b2b-unassigned' && <SaaSB2BUnassignedView />}
+        {(activeTab === 'saas-invoicing' || activeTab === 'generate-invoice') && <SaaSInvoicingView />}
+        {activeTab === 'kra-etims' && <KraEtimsView />}
+        {(activeTab === 'payments-overview' || activeTab === 'unassigned-payments-hub') && <PaymentsHubOverviewView />}
+        {(activeTab === 'saas-b2b-unassigned' || activeTab === 'saas-unassigned-payments') && <SaaSB2BUnassignedView />}
         {(activeTab === 'tenant-unassigned-payments' || activeTab === 'unassigned-tenant-payments') && (
-          <TenantUnassignedPaymentsTab setActiveTab={setActiveTab} />
+          <TenantUnassignedPaymentsTab setActiveTab={(tab) => setActiveTab(tab as SuperadminTab)} />
         )}
-        {activeTab === 'cron-lockdown' && <CronLockdownView />}
-        {activeTab === 'webhook-dlq' && <WebhookDLQView />}
-        {activeTab === 'tenant-impersonation' && <TenantImpersonationView />}
+        {(activeTab === 'cron-lockdown' || activeTab === 'system-control') && <CronLockdownView />}
+        {(activeTab === 'webhook-dlq' || activeTab === 'webhook-debugger') && <WebhookDLQView />}
+        {(activeTab === 'tenant-impersonation' || activeTab === 'impersonator') && <TenantImpersonationView />}
       </main>
     </div>
   );
 }
 
 /* ============================================================================
-   DYNAMIC SUBSCRIBERS & AGENCIES VIEW WITH ETIMS MANAGEMENT
+   KRA ETIMS MANAGEMENT VIEW
+   ============================================================================ */
+
+function KraEtimsView() {
+  const [agencies, setAgencies] = useState<any[]>([]);
+  const [etimsConfigs, setEtimsConfigs] = useState<Record<string, boolean>>({});
+  const [loading, setLoading] = useState(true);
+  const [selectedAgency, setSelectedAgency] = useState<{ id: string; name: string } | null>(null);
+
+  useEffect(() => {
+    loadEtimsAgencies();
+  }, []);
+
+  async function loadEtimsAgencies() {
+    setLoading(true);
+    try {
+      const { data: profileData, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('role', ['property_manager', 'super_admin', 'owner', 'property-manager', 'super-admin'])
+        .order('created_at', { ascending: false });
+
+      if (profileErr) throw profileErr;
+      setAgencies(profileData || []);
+
+      const { data: configData, error: configErr } = await supabase
+        .from('agency_etims_configs')
+        .select('profile_id, is_enabled');
+
+      if (!configErr && configData) {
+        const configMap: Record<string, boolean> = {};
+        configData.forEach((c) => {
+          configMap[c.profile_id] = c.is_enabled;
+        });
+        setEtimsConfigs(configMap);
+      }
+    } catch (err: any) {
+      console.error('Failed to load agency eTIMS data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6 max-w-6xl">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-white">KRA eTIMS Compliance Hub</h1>
+          <p className="text-xs text-slate-400 mt-1">
+            Assign and manage KRA ESD device settings, PIN configurations, and eTIMS invoice signatures per agency.
+          </p>
+        </div>
+        <button
+          onClick={loadEtimsAgencies}
+          className="text-xs bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 px-3 py-2 rounded-xl transition"
+        >
+          Refresh Statuses
+        </button>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+        {loading ? (
+          <div className="p-12 text-center text-xs text-slate-400">Loading KRA eTIMS agency options...</div>
+        ) : (
+          <table className="w-full text-left text-xs text-slate-300">
+            <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-800">
+              <tr>
+                <th className="px-6 py-3">Subscriber / Agency</th>
+                <th className="px-6 py-3">Email Contact</th>
+                <th className="px-6 py-3">System Role</th>
+                <th className="px-6 py-3">eTIMS Compliance</th>
+                <th className="px-6 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800">
+              {agencies.map((agency) => {
+                const isEtimsEnabled = etimsConfigs[agency.id] || false;
+                return (
+                  <tr key={agency.id} className="hover:bg-slate-800/50 transition">
+                    <td className="px-6 py-4 font-semibold text-white">{agency.full_name}</td>
+                    <td className="px-6 py-4">{agency.email}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-2.5 py-1 rounded-md bg-slate-950 border border-slate-800 font-mono text-[10px] text-amber-400">
+                        {agency.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {isEtimsEnabled ? (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          ✓ Active / Transmitting
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700">
+                          Disabled
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => setSelectedAgency({ id: agency.id, name: agency.full_name })}
+                        className="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold transition shadow-sm"
+                      >
+                        ⚙ Assign & Configure eTIMS
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {selectedAgency && (
+        <EtimsConfigModal
+          profileId={selectedAgency.id}
+          profileName={selectedAgency.name}
+          onClose={() => {
+            setSelectedAgency(null);
+            loadEtimsAgencies();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ============================================================================
+   SUBSCRIBERS & AGENCIES VIEW
    ============================================================================ */
 
 function SubscribersAgenciesView() {
@@ -131,7 +182,6 @@ function SubscribersAgenciesView() {
   async function loadSubscribers() {
     setLoading(true);
     try {
-      // Fetch property managers / owners / agency profiles
       const { data: profileData, error: profileErr } = await supabase
         .from('profiles')
         .select('*')
@@ -141,7 +191,6 @@ function SubscribersAgenciesView() {
       if (profileErr) throw profileErr;
       setProfiles(profileData || []);
 
-      // Fetch active eTIMS configurations
       const { data: configData, error: configErr } = await supabase
         .from('agency_etims_configs')
         .select('profile_id, is_enabled');
@@ -224,14 +273,13 @@ function SubscribersAgenciesView() {
         )}
       </div>
 
-      {/* Render eTIMS Configuration Modal when an agency is selected */}
       {selectedProfile && (
         <EtimsConfigModal
           profileId={selectedProfile.id}
           profileName={selectedProfile.name}
           onClose={() => {
             setSelectedProfile(null);
-            loadSubscribers(); // Refresh feature badges after saving
+            loadSubscribers();
           }}
         />
       )}
