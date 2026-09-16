@@ -9,7 +9,8 @@ import {
   History, 
   Wrench,
   DollarSign,
-  LogOut
+  LogOut,
+  Receipt
 } from 'lucide-react';
 
 import { DashboardTab } from './tabs/DashboardTab';
@@ -17,8 +18,8 @@ import { MeterReadingTab } from './tabs/MeterReadingTab';
 import { AddTenantTab } from './tabs/AddTenantTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
+import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
 
-// Exported type for external components (e.g., Sidebar.tsx)
 export type CaretakerTab = 
   | 'dashboard' 
   | 'meter' 
@@ -29,6 +30,7 @@ export type CaretakerTab =
   | 'settings';
 
 interface CaretakerProfile {
+  id?: string;
   full_name: string;
   assigned_property_id?: string;
   assigned_property_name?: string;
@@ -39,6 +41,7 @@ export default function CaretakerPortalPage() {
   const [activeTab, setActiveTab] = useState<CaretakerTab>('dashboard');
   const [profile, setProfile] = useState<CaretakerProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -63,12 +66,10 @@ export default function CaretakerPortalPage() {
 
   const handleLogout = async () => {
     try {
-      // Call auth logout endpoint if applicable
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch (err) {
       console.error('Logout error:', err);
     } finally {
-      // Redirect to login page
       router.push('/login');
     }
   };
@@ -166,20 +167,30 @@ export default function CaretakerPortalPage() {
       {/* Main Content Area */}
       <main className="flex-1 p-8 overflow-y-auto">
         {/* Profile Header */}
-        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm mb-8">
-          <h2 className="text-2xl font-extrabold text-emerald-700">
-            {loading ? (
-              <span className="animate-pulse text-gray-400">Loading user profile...</span>
-            ) : (
-              `Welcome Back, ${profile?.full_name ? profile.full_name : 'Caretaker'}`
-            )}
-          </h2>
-          <p className="text-sm font-medium text-gray-600 mt-1">
-            Assigned Property:{' '}
-            <span className="font-semibold text-gray-800">
-              {profile?.assigned_property_name || 'No assigned property record found'}
-            </span>
-          </p>
+        <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-extrabold text-emerald-700">
+              {loading ? (
+                <span className="animate-pulse text-gray-400">Loading user profile...</span>
+              ) : (
+                `Welcome Back, ${profile?.full_name ? profile.full_name : 'Caretaker'}`
+              )}
+            </h2>
+            <p className="text-sm font-medium text-gray-600 mt-1">
+              Assigned Property:{' '}
+              <span className="font-semibold text-gray-800">
+                {profile?.assigned_property_name || 'No assigned property record found'}
+              </span>
+            </p>
+          </div>
+
+          <button
+            onClick={() => setIsInvoiceModalOpen(true)}
+            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-md shadow-emerald-600/20 shrink-0"
+          >
+            <Receipt size={16} />
+            <span>Generate Invoice</span>
+          </button>
         </div>
 
         {/* Tab Views */}
@@ -202,6 +213,15 @@ export default function CaretakerPortalPage() {
           <UnassignedPaymentsTab propertyId={profile?.assigned_property_id} />
         )}
       </main>
+
+      {/* Invoice Generation Modal */}
+      <GenerateInvoiceModal
+        isOpen={isInvoiceModalOpen}
+        onClose={() => setIsInvoiceModalOpen(false)}
+        creatorRole="caretaker"
+        profileId={profile?.id || ''}
+        propertyId={profile?.assigned_property_id}
+      />
     </div>
   );
 }

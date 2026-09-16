@@ -1,21 +1,24 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { Receipt } from 'lucide-react';
 import { OwnerTab } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { DashboardTab } from './tabs/DashboardTab';
-import  AddPropertyTab from './tabs/AddPropertyTab'; // Fixed: Changed to named import
+import AddPropertyTab from './tabs/AddPropertyTab';
 import { UserManagementTab } from './tabs/UserManagementTab';
 import { TenantsTab } from './tabs/TenantsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import { SubscriptionsTab } from './tabs/SubscriptionsTab';
 import { createClient } from '@/lib/supabaseClient';
+import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
 
 export default function OwnerPage() {
   const [activeTab, setActiveTab] = useState<OwnerTab>('dashboard');
   const [ownerFullName, setOwnerFullName] = useState<string>('Property Owner');
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -87,13 +90,32 @@ export default function OwnerPage() {
       {/* 2. MAIN LAYOUT AREA */}
       <main className="flex-1 flex flex-col h-full overflow-y-auto">
         {/* TOP HEADER */}
-        <Header fullName={ownerFullName} />
+        <div className="flex items-center justify-between border-b border-gray-200 bg-white pr-6">
+          <div className="flex-1">
+            <Header fullName={ownerFullName} />
+          </div>
+          <button
+            onClick={() => setIsInvoiceModalOpen(true)}
+            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md shadow-amber-500/20 shrink-0"
+          >
+            <Receipt size={16} />
+            <span>Generate Invoice</span>
+          </button>
+        </div>
 
         {/* TAB CONTENT WRAPPER */}
         <div className="p-6 md:p-8 flex-1 max-w-7xl w-full mx-auto space-y-6">
           {renderTabContent()}
         </div>
       </main>
+
+      {/* Invoice Generation Modal */}
+      <GenerateInvoiceModal
+        isOpen={isInvoiceModalOpen}
+        onClose={() => setIsInvoiceModalOpen(false)}
+        creatorRole="owner"
+        profileId={currentUserId}
+      />
     </div>
   );
 }

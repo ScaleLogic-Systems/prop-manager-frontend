@@ -19,11 +19,12 @@ import { supabase } from '@/lib/supabaseClient';
 
 // Import tab components
 import { DashboardTab } from './tabs/DashboardTab';
-import  AddPropertyTab from './tabs/AddPropertyTab';
+import AddPropertyTab from './tabs/AddPropertyTab';
 import { UserManagementTab } from './tabs/UserManagementTab';
 import { TenantsTab } from './tabs/TenantsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import { SubscriptionsTab } from './tabs/SubscriptionsTab';
+import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
 
 export type ManagerTab = 'dashboard' | 'add-property' | 'users' | 'tenants' | 'unassigned-payments' | 'subscription';
 
@@ -31,8 +32,10 @@ export default function PropertyManagerPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ManagerTab>('dashboard');
   const [fullName, setFullName] = useState<string>('');
+  const [currentUserId, setCurrentUserId] = useState<string>('');
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
   const [loggingOut, setLoggingOut] = useState<boolean>(false);
+  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -43,6 +46,8 @@ export default function PropertyManagerPage() {
         const { data: { user }, error: authError } = await supabase.auth.getUser();
 
         if (user) {
+          setCurrentUserId(user.id);
+
           // Check user metadata first
           const metaName = user.user_metadata?.full_name || user.user_metadata?.name;
           if (metaName && typeof metaName === 'string' && metaName.trim()) {
@@ -60,7 +65,6 @@ export default function PropertyManagerPage() {
           if (dbName && typeof dbName === 'string' && dbName.trim()) {
             setFullName(dbName.trim());
           } else if (!metaName && user.email) {
-            // Fallback to email prefix if no name exists in profile row
             setFullName(user.email.split('@')[0]);
           }
         } else {
@@ -69,6 +73,7 @@ export default function PropertyManagerPage() {
           if (res.ok) {
             const data = await res.json();
             if (data?.full_name) setFullName(data.full_name);
+            if (data?.id) setCurrentUserId(data.id);
           }
         }
       } catch (err) {
@@ -200,6 +205,14 @@ export default function PropertyManagerPage() {
                 </span> 👋
               </h1>
             </div>
+
+            <button
+              onClick={() => setIsInvoiceModalOpen(true)}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-lg shadow-blue-600/20 shrink-0 self-start md:self-auto"
+            >
+              <Receipt size={16} />
+              <span>Generate Invoice</span>
+            </button>
           </div>
         </header>
 
@@ -215,6 +228,14 @@ export default function PropertyManagerPage() {
           </div>
         </main>
       </div>
+
+      {/* Invoice Generation Modal */}
+      <GenerateInvoiceModal
+        isOpen={isInvoiceModalOpen}
+        onClose={() => setIsInvoiceModalOpen(false)}
+        creatorRole="property_manager"
+        profileId={currentUserId}
+      />
     </div>
   );
 }

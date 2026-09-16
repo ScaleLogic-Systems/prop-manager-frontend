@@ -30,6 +30,27 @@ export type SuperadminTab =
 
 export type SuperAdminTab = SuperadminTab;
 
+// KRA eTIMS & Compliance Types
+export type TenantEntityType = 'individual' | 'commercial_b2b';
+export type EtimsStatus = 'draft' | 'pending_transmission' | 'signed' | 'failed';
+
+export interface Agency {
+  id: string;
+  agency_name: string;
+  contact_email: string;
+  phone: string;
+  etims_enabled?: boolean;
+  kra_pin?: string | null;
+  branch_id?: string | null;
+  created_at?: string;
+}
+
+export interface EtimsConfigModalProps {
+  profileId: string;
+  profileName: string;
+  onClose: () => void;
+}
+
 export interface SaaSPayment {
   id: string;
   amount: number;
@@ -86,6 +107,9 @@ export interface Subscriber {
   phone: string;
   plan: 'starter' | 'growth' | 'enterprise';
   status: 'active' | 'suspended' | 'past_due';
+  etims_enabled?: boolean;
+  kra_pin?: string | null;
+  branch_id?: string | null;
   created_at?: string;
 }
 
