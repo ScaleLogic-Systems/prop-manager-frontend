@@ -2,31 +2,31 @@
 'use client';
 
 import React, { useState } from 'react';
-import { RotateCw, Code2 } from 'lucide-react';
+import { RotateCw, AlertOctagon, Code2 } from 'lucide-react';
 import { FailedWebhook } from '../types';
-
-const MOCK_FAILED_WEBHOOKS: FailedWebhook[] = [
-  {
-    id: 'wh_9021',
-    source: 'mpesa_c2b',
-    endpoint: '/api/v1/mpesa/c2b/callback',
-    payload: {
-      TransactionType: 'Pay Bill',
-      TransID: 'RKT92104KS',
-      TransAmount: '45000',
-      BusinessShortCode: '600100',
-      BillRefNumber: 'HOUSE-B4',
-      MSISDN: '254712345678',
-    },
-    error_message: 'Unassigned Account: Unit reference HOUSE-B4 not matched to active lease.',
-    retry_count: 2,
-    created_at: '2026-09-18T12:00:00.000Z',
-  },
-];
 
 export const WebhookDebuggerTab: React.FC = () => {
   const [replayingId, setReplayingId] = useState<string | null>(null);
-  const [selectedPayload, setSelectedPayload] = useState<Record<string, unknown> | null>(null);
+  const [selectedPayload, setSelectedPayload] = useState<Record<string, any> | null>(null);
+
+  const mockFailedWebhooks: FailedWebhook[] = [
+    {
+      id: 'wh_9021',
+      source: 'mpesa_c2b',
+      endpoint: '/api/v1/mpesa/c2b/callback',
+      payload: {
+        TransactionType: 'Pay Bill',
+        TransID: 'RKT92104KS',
+        TransAmount: '45000',
+        BusinessShortCode: '600100',
+        BillRefNumber: 'HOUSE-B4',
+        MSISDN: '254712345678',
+      },
+      error_message: 'Unassigned Account: Unit reference HOUSE-B4 not matched to active lease.',
+      retry_count: 2,
+      created_at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+    },
+  ];
 
   const handleReplay = async (id: string) => {
     setReplayingId(id);
@@ -41,14 +41,14 @@ export const WebhookDebuggerTab: React.FC = () => {
         {/* Callbacks List */}
         <div className="lg:col-span-2 bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-4 shadow-xl">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-            <h3 className="font-bold text-white text-sm">Dropped Callbacks ({MOCK_FAILED_WEBHOOKS.length})</h3>
+            <h3 className="font-bold text-white text-sm">Dropped Callbacks ({mockFailedWebhooks.length})</h3>
             <span className="text-[11px] font-mono text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2.5 py-0.5 rounded-full">
               DLQ Monitored
             </span>
           </div>
 
           <div className="divide-y divide-slate-800/80">
-            {MOCK_FAILED_WEBHOOKS.map((wh) => (
+            {mockFailedWebhooks.map((wh) => (
               <div key={wh.id} className="py-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -100,7 +100,7 @@ export const WebhookDebuggerTab: React.FC = () => {
             </pre>
           ) : (
             <div className="text-slate-500 py-16 text-center text-xs">
-              Select <span className="text-indigo-400">&quot;View Raw Payload&quot;</span> to inspect payload body.
+              Select <span className="text-indigo-400">"View Raw Payload"</span> to inspect payload body.
             </div>
           )}
         </div>

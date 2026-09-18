@@ -14,40 +14,40 @@ export interface AuditLogItem {
   timestamp: string;
 }
 
-const MOCK_LOGS: AuditLogItem[] = [
-  {
-    id: 'log_901',
-    actor_email: 'superadmin@propmanager.co.ke',
-    action: 'IMPERSONATE_USER',
-    target_organization: 'Kiprono Real Estate',
-    ip_address: '102.217.64.12',
-    status: 'warning',
-    timestamp: '2026-09-18T11:45:00.000Z',
-  },
-  {
-    id: 'log_902',
-    actor_email: 'superadmin@propmanager.co.ke',
-    action: 'REPLAY_MPESA_WEBHOOK',
-    target_organization: 'Greenwood Heights',
-    ip_address: '102.217.64.12',
-    status: 'success',
-    timestamp: '2026-09-18T11:15:00.000Z',
-  },
-  {
-    id: 'log_903',
-    actor_email: 'accounts@kiprono.co.ke',
-    action: 'MANUAL_RECONCILE_PAYMENT',
-    target_organization: 'Kiprono Real Estate',
-    ip_address: '197.232.14.88',
-    status: 'success',
-    timestamp: '2026-09-18T09:45:00.000Z',
-  },
-];
-
 export const AuditLogsTab: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
-  const filteredLogs = MOCK_LOGS.filter(
+  const mockLogs: AuditLogItem[] = [
+    {
+      id: 'log_901',
+      actor_email: 'superadmin@propmanager.co.ke',
+      action: 'IMPERSONATE_USER',
+      target_organization: 'Kiprono Real Estate',
+      ip_address: '102.217.64.12',
+      status: 'warning',
+      timestamp: new Date().toISOString(),
+    },
+    {
+      id: 'log_902',
+      actor_email: 'superadmin@propmanager.co.ke',
+      action: 'REPLAY_MPESA_WEBHOOK',
+      target_organization: 'Greenwood Heights',
+      ip_address: '102.217.64.12',
+      status: 'success',
+      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    },
+    {
+      id: 'log_903',
+      actor_email: 'accounts@kiprono.co.ke',
+      action: 'MANUAL_RECONCILE_PAYMENT',
+      target_organization: 'Kiprono Real Estate',
+      ip_address: '197.232.14.88',
+      status: 'success',
+      timestamp: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    },
+  ];
+
+  const filteredLogs = mockLogs.filter(
     (log) =>
       log.actor_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
