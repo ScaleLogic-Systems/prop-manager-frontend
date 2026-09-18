@@ -35,10 +35,6 @@ export const SubscribersTab: React.FC = () => {
   const [history, setHistory] = useState<Invoice[]>([]);
   const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
 
-  useEffect(() => {
-    fetchSubscribers();
-  }, []);
-
   async function fetchSubscribers() {
     setLoading(true);
     try {
@@ -113,6 +109,10 @@ export const SubscribersTab: React.FC = () => {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    fetchSubscribers();
+  }, []);
 
   async function openPaymentHistory(subscriber: Subscriber) {
     setSelectedSubscriber(subscriber);

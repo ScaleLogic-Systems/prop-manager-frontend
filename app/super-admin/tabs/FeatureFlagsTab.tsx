@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ToggleRight, ToggleLeft, Sliders, ShieldCheck } from 'lucide-react';
+import { ToggleRight, ToggleLeft } from 'lucide-react';
 
 export interface FeatureFlag {
   id: string;
@@ -19,7 +19,7 @@ export const FeatureFlagsTab: React.FC = () => {
       id: 'ff_1',
       key: 'whatsapp_bot_automation',
       name: 'WhatsApp Bot Integration',
-      description: 'Allows tenants to query balances and download rent receipts via WhatsApp.',
+      description: 'Allows tenants to query balances and download rent receipts via WhatsApp automated bot.',
       min_tier: 'growth',
       enabled_globally: true,
     },
@@ -35,7 +35,7 @@ export const FeatureFlagsTab: React.FC = () => {
       id: 'ff_3',
       key: 'auto_mpesa_stk_push',
       name: 'Automated Monthly STK Push',
-      description: 'Triggers automated M-Pesa STK push prompts on rent due date.',
+      description: 'Triggers automated M-Pesa STK push prompts to tenants on rent due date.',
       min_tier: 'growth',
       enabled_globally: false,
     },
@@ -49,35 +49,32 @@ export const FeatureFlagsTab: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
-        <h2 className="text-lg font-bold text-gray-900">Feature Flags & Module Controls</h2>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Enable or disable modular SaaS features globally or restrict them by subscription tier.
-        </p>
-      </div>
-
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 space-y-4">
-        <div className="divide-y divide-gray-100">
+      <div className="bg-slate-900 rounded-2xl border border-slate-800 shadow-xl p-6 space-y-4">
+        <div className="divide-y divide-slate-800/80">
           {flags.map((flag) => (
-            <div key={flag.id} className="py-4 flex items-center justify-between gap-4">
-              <div className="space-y-1">
+            <div key={flag.id} className="py-4.5 flex items-center justify-between gap-4">
+              <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-gray-900">{flag.name}</span>
-                  <span className="font-mono text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded uppercase font-bold">
+                  <span className="font-bold text-sm text-white">{flag.name}</span>
+                  <span className="font-mono text-[10px] bg-slate-950 text-amber-400 border border-slate-800 px-2.5 py-0.5 rounded-full uppercase font-bold">
                     {flag.min_tier}+ Tier
                   </span>
                 </div>
-                <p className="text-xs text-gray-500">{flag.description}</p>
-                <code className="text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded font-mono">
+                <p className="text-xs text-slate-400">{flag.description}</p>
+                <code className="text-[10px] text-indigo-400 bg-slate-950 border border-slate-800 px-2 py-0.5 rounded font-mono inline-block">
                   {flag.key}
                 </code>
               </div>
 
-              <button onClick={() => toggleFlag(flag.id)} className="shrink-0">
+              <button
+                onClick={() => toggleFlag(flag.id)}
+                className="shrink-0 p-1 hover:opacity-90 transition cursor-pointer"
+                title={flag.enabled_globally ? 'Disable Globally' : 'Enable Globally'}
+              >
                 {flag.enabled_globally ? (
-                  <ToggleRight size={38} className="text-amber-500" />
+                  <ToggleRight size={40} className="text-amber-500" />
                 ) : (
-                  <ToggleLeft size={38} className="text-gray-300" />
+                  <ToggleLeft size={40} className="text-slate-600" />
                 )}
               </button>
             </div>

@@ -2,13 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { InvoiceMetrics } from '../types';
-
-interface ExtendedInvoiceMetrics extends InvoiceMetrics {
-  partialAmount?: number;
-  partialCount?: number;
-}
-
 export const DashboardTab: React.FC = () => {
   const [metrics, setMetrics] = useState<{
     paidAmount: number;

@@ -27,7 +27,7 @@ export const AddUsersTab: React.FC = () => {
     setMessage(null);
 
     try {
-      const { data, error } = await supabase.from('profiles').insert([
+      const { error } = await supabase.from('profiles').insert([
         {
           email,
           full_name: fullName,
@@ -42,8 +42,9 @@ export const AddUsersTab: React.FC = () => {
       setEmail('');
       setFullName('');
       setRole('developer');
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to onboard user.' });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to onboard user.';
+      setMessage({ type: 'error', text: errorMsg });
     } finally {
       setLoading(false);
     }

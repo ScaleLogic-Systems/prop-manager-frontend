@@ -65,7 +65,7 @@ export interface SaaSPayment {
   agency_name?: string;
   status: 'unassigned' | 'matched' | 'resolved' | 'pending' | 'UNASSIGNED' | string;
   created_at?: string;
-  raw_payload?: Record<string, any>;
+  raw_payload?: Record<string, unknown>;
 }
 
 export interface TenantPayment {
@@ -85,7 +85,7 @@ export interface TenantPayment {
   payment_date?: string;
   status: 'unassigned' | 'matched' | 'resolved' | 'pending' | 'UNASSIGNED' | string;
   created_at?: string;
-  raw_payload?: Record<string, any>;
+  raw_payload?: Record<string, unknown>;
 }
 
 export interface InvoiceMetrics {
@@ -117,7 +117,7 @@ export interface FailedWebhook {
   id: string;
   source: 'mpesa_c2b' | 'mpesa_stk' | 'whatsapp' | 'sms';
   endpoint: string;
-  payload: Record<string, any>;
+  payload: Record<string, unknown>;
   error_message: string;
   retry_count: number;
   created_at: string;

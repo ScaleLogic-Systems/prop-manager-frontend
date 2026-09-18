@@ -15,7 +15,9 @@ import {
   UserCheck, 
   Crown, 
   LogOut,
-  Landmark
+  Landmark,
+  Shield,
+  Sliders
 } from 'lucide-react';
 import { SuperadminTab } from '../types';
 import { createClient } from '@/lib/supabaseClient';
@@ -60,6 +62,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         { id: 'system-control' as SuperadminTab, label: 'Cron & Emergency Lockdown', icon: ShieldAlert },
         { id: 'webhook-debugger' as SuperadminTab, label: 'Webhook DLQ & Replay', icon: RotateCw },
         { id: 'impersonator' as SuperadminTab, label: 'Tenant Impersonation', icon: UserCheck },
+      ],
+    },
+    {
+      title: 'Governance & Feature Control',
+      items: [
+        { id: 'audit-logs' as SuperadminTab, label: 'Platform Audit Logs', icon: Shield },
+        { id: 'feature-flags' as SuperadminTab, label: 'Feature Flags & Modules', icon: Sliders },
       ],
     },
   ];

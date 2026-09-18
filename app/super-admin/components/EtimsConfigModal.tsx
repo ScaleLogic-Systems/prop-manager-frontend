@@ -22,10 +22,6 @@ export const EtimsConfigModal: React.FC<EtimsConfigModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    fetchEtimsConfig();
-  }, [profileId]);
-
   async function fetchEtimsConfig() {
     setLoading(true);
     try {
@@ -43,12 +39,16 @@ export const EtimsConfigModal: React.FC<EtimsConfigModalProps> = ({
         setVscuSerial(data.vscu_serial_number || '');
         setBranchCode(data.branch_code || '00');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching eTIMS config:', err);
     } finally {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    fetchEtimsConfig();
+  }, [profileId]);
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -72,8 +72,9 @@ export const EtimsConfigModal: React.FC<EtimsConfigModalProps> = ({
 
       setMessage({ type: 'success', text: 'eTIMS configuration updated successfully!' });
       setTimeout(() => onClose(), 1200);
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to update eTIMS settings.' });
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to update eTIMS settings.';
+      setMessage({ type: 'error', text: errorMsg });
     } finally {
       setSaving(false);
     }

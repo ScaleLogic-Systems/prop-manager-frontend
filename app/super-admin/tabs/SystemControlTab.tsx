@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldAlert, Play, ToggleRight, ToggleLeft, AlertTriangle } from 'lucide-react';
+import { Play, ToggleRight, ToggleLeft, AlertTriangle } from 'lucide-react';
 
 export const SystemControlTab: React.FC = () => {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -38,38 +38,40 @@ export const SystemControlTab: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="bg-red-950/20 border border-red-900/50 rounded-2xl p-6 text-red-200 flex items-center justify-between">
+      {/* Maintenance Mode Emergency Alert */}
+      <div className="bg-red-950/30 border border-red-900/60 rounded-2xl p-6 text-red-200 flex items-center justify-between shadow-xl">
         <div className="space-y-1">
           <div className="flex items-center gap-2 font-bold text-red-400 text-sm">
             <AlertTriangle size={18} /> Maintenance Mode & Emergency Lockdown
           </div>
-          <p className="text-xs text-red-300">
+          <p className="text-xs text-red-300/80">
             Locks down database mutations across client portals during critical database maintenance or outage windows.
           </p>
         </div>
-        <button onClick={() => setMaintenanceMode(!maintenanceMode)}>
+        <button onClick={() => setMaintenanceMode(!maintenanceMode)} className="cursor-pointer">
           {maintenanceMode ? (
-            <ToggleRight size={40} className="text-red-500" />
+            <ToggleRight size={44} className="text-red-500" />
           ) : (
-            <ToggleLeft size={40} className="text-slate-600" />
+            <ToggleLeft size={44} className="text-slate-600" />
           )}
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4 shadow-sm">
-        <h3 className="font-bold text-gray-900 text-sm">Manual Job Runner & Queue Trigger</h3>
-        <div className="divide-y divide-gray-100">
+      {/* Manual Worker Queues */}
+      <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 space-y-4 shadow-xl">
+        <h3 className="font-bold text-white text-sm tracking-tight">Manual Job Runner & Queue Trigger</h3>
+        <div className="divide-y divide-slate-800/80">
           {jobs.map((job) => (
-            <div key={job.id} className="py-3.5 flex items-center justify-between text-xs">
-              <div className="space-y-0.5">
-                <p className="font-bold text-gray-900">{job.name}</p>
-                <p className="text-gray-500 text-[11px]">{job.description}</p>
-                <p className="text-gray-400 text-[10px]">Last execution: {job.lastRun}</p>
+            <div key={job.id} className="py-4 flex items-center justify-between text-xs gap-4">
+              <div className="space-y-1">
+                <p className="font-bold text-white text-sm">{job.name}</p>
+                <p className="text-slate-400 text-xs">{job.description}</p>
+                <p className="text-slate-500 text-[11px] font-mono">Last execution: {job.lastRun}</p>
               </div>
               <button
                 onClick={() => handleRunJob(job.id)}
                 disabled={runningJob === job.id}
-                className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold px-3 py-1.5 rounded-lg transition text-xs disabled:opacity-50 shrink-0"
+                className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3.5 py-2 rounded-xl transition text-xs disabled:opacity-50 shrink-0 shadow-sm cursor-pointer"
               >
                 <Play size={12} className={runningJob === job.id ? 'animate-spin' : ''} />
                 {runningJob === job.id ? 'Executing...' : 'Run Worker'}

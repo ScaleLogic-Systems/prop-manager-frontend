@@ -4,6 +4,17 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { TenantPayment, SuperAdminTab } from '../types';
 
+interface RawPaymentRecord {
+  id: string;
+  transaction_code: string;
+  amount: number;
+  created_at: string;
+  sender_phone?: string;
+  status: string;
+  tenant?: { full_name?: string } | null;
+  unit?: { unit_number?: string; property?: { name?: string } | null } | null;
+}
+
 interface Props {
   setActiveTab: (tab: SuperAdminTab) => void;
 }
@@ -34,7 +45,7 @@ export const TenantUnassignedPaymentsTab: React.FC<Props> = ({ setActiveTab }) =
       .order('created_at', { ascending: false });
 
     if (!error && data) {
-      const formatted: TenantPayment[] = data.map((item: any) => ({
+      const formatted: TenantPayment[] = (data as unknown as RawPaymentRecord[]).map((item) => ({
         id: item.id,
         transaction_code: item.transaction_code,
         amount: item.amount,

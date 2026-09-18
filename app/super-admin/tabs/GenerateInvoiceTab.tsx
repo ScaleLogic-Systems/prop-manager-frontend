@@ -19,19 +19,35 @@ export const GenerateInvoiceTab: React.FC = () => {
   
   // Custom or auto-filled billing state
   const [amount, setAmount] = useState<number>(500);
-  const [dueDate, setDueDate] = useState<string>('');
+  const [dueDate] = useState<string>(() => {
+    const defaultDue = new Date();
+    defaultDue.setDate(defaultDue.getDate() + 7);
+    return defaultDue.toISOString().split('T')[0];
+  });
   const [description, setDescription] = useState<string>('');
   
   const [sending, setSending] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    fetchSubscribersWithOccupiedUnits();
-    // Default due date: 7 days from today
-    const defaultDue = new Date();
-    defaultDue.setDate(defaultDue.getDate() + 7);
-    setDueDate(defaultDue.toISOString().split('T')[0]);
-  }, []);
+  // Auto calculate pricing based on occupied units range
+  const calculateDefaultTierAmount = (units: number): number => {
+    if (units <= 20) return 500;
+    if (units <= 50) return 1000;
+    if (units <= 100) return 1500;
+    // Scaled tier above 100 units
+    return Math.ceil(units / 50) * 1000;
+  };
+
+  const handleSubscriberSelect = (userId: string, currentSubscribers = subscribers) => {
+    setSelectedSubscriberId(userId);
+    const sub = currentSubscribers.find((s) => s.id === userId);
+    if (sub) {
+      const calculatedAmount = calculateDefaultTierAmount(sub.occupiedUnits);
+      setAmount(calculatedAmount);
+      const propText = sub.propertyNames.length > 0 ? sub.propertyNames.join(', ') : 'Registered Properties';
+      setDescription(`SaaS Subscription Fee - ${sub.occupiedUnits} Occupied Units (${propText})`);
+    }
+  };
 
   async function fetchSubscribersWithOccupiedUnits() {
     setLoading(true);
@@ -95,25 +111,9 @@ export const GenerateInvoiceTab: React.FC = () => {
     }
   }
 
-  // Auto calculate pricing based on occupied units range
-  const calculateDefaultTierAmount = (units: number): number => {
-    if (units <= 20) return 500;
-    if (units <= 50) return 1000;
-    if (units <= 100) return 1500;
-    // Scaled tier above 100 units
-    return Math.ceil(units / 50) * 1000;
-  };
-
-  const handleSubscriberSelect = (userId: string, currentSubscribers = subscribers) => {
-    setSelectedSubscriberId(userId);
-    const sub = currentSubscribers.find((s) => s.id === userId);
-    if (sub) {
-      const calculatedAmount = calculateDefaultTierAmount(sub.occupiedUnits);
-      setAmount(calculatedAmount);
-      const propText = sub.propertyNames.length > 0 ? sub.propertyNames.join(', ') : 'Registered Properties';
-      setDescription(`SaaS Subscription Fee - ${sub.occupiedUnits} Occupied Units (${propText})`);
-    }
-  };
+  useEffect(() => {
+    fetchSubscribersWithOccupiedUnits();
+  }, []);
 
   const selectedSubscriber = subscribers.find((s) => s.id === selectedSubscriberId);
 
