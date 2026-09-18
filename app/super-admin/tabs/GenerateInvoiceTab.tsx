@@ -19,7 +19,7 @@ export const GenerateInvoiceTab: React.FC = () => {
   
   // Custom or auto-filled billing state
   const [amount, setAmount] = useState<number>(500);
-  const [dueDate] = useState<string>(() => {
+  const [dueDate, setDueDate] = useState<string>(() => {
     const defaultDue = new Date();
     defaultDue.setDate(defaultDue.getDate() + 7);
     return defaultDue.toISOString().split('T')[0];
