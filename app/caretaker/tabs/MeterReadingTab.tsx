@@ -9,13 +9,30 @@ interface DynamicUnit {
   tenant_name: string;
   previous_reading: number;
   water_rate: number;
+  rent_amount: number;
+  garbage_fee: number;
+  parking_fee: number;
+  water_fee: number;
 }
 
-export const MeterReadingTab: React.FC<{ propertyId?: string }> = ({ propertyId }) => {
+interface GeneratedInvoice {
+  id: string;
+  unit_number: string;
+  tenant_name: string;
+  previous_reading: number;
+  current_reading: number;
+  units_consumed: number;
+  total_amount: number;
+}
+
+export const MeterReadingTab: React.FC<{ propertyId?: string; profileId?: string }> = ({
+  propertyId,
+  profileId,
+}) => {
   const [units, setUnits] = useState<DynamicUnit[]>([]);
   const [selectedUnitId, setSelectedUnitId] = useState<string>('');
   const [currentReading, setCurrentReading] = useState<number | ''>('');
-  const [generatedInvoices, setGeneratedInvoices] = useState<any[]>([]);
+  const [generatedInvoices, setGeneratedInvoices] = useState<GeneratedInvoice[]>([]);
   const [loading, setLoading] = useState(false);
   const [fetchingUnits, setFetchingUnits] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -60,11 +77,16 @@ export const MeterReadingTab: React.FC<{ propertyId?: string }> = ({ propertyId 
     setLoading(true);
 
     try {
-      const response = await fetch('/caretaker/api/generate-invoice', {
+      const response = await fetch('/api/invoices/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          profile_id: profileId,
+          creator_role: 'caretaker',
           unit_id: selectedUnit.id,
+          unit_number: selectedUnit.unit_number,
+          tenant_name: selectedUnit.tenant_name,
+          invoice_type: 'water',
           previous_reading: selectedUnit.previous_reading,
           current_reading: Number(currentReading),
           rate_per_unit: selectedUnit.water_rate,
@@ -74,10 +96,21 @@ export const MeterReadingTab: React.FC<{ propertyId?: string }> = ({ propertyId 
       const resData = await response.json();
       if (!response.ok) throw new Error(resData.error || 'Failed to generate water invoice');
 
-      setGeneratedInvoices([resData.invoice, ...generatedInvoices]);
+      setGeneratedInvoices([
+        {
+          ...resData.invoice,
+          total_amount: resData.invoice?.total_amount ?? resData.invoice?.amount,
+          unit_number: selectedUnit.unit_number,
+          tenant_name: selectedUnit.tenant_name,
+          units_consumed: Number(currentReading) - selectedUnit.previous_reading,
+          previous_reading: selectedUnit.previous_reading,
+          current_reading: Number(currentReading),
+        },
+        ...generatedInvoices,
+      ]);
       setCurrentReading('');
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Something went wrong');
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -153,9 +186,22 @@ export const MeterReadingTab: React.FC<{ propertyId?: string }> = ({ propertyId 
               </div>
             </div>
 
-            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center text-sm">
-              <span className="text-gray-600">Unit Configured Water Rate:</span>
-              <span className="font-bold text-gray-800">${selectedUnit?.water_rate || 0} / unit</span>
+            <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-2 text-sm">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-600">Configured water rate:</span>
+                <span className="font-bold text-gray-800">KES {selectedUnit?.water_rate || 0} / unit</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-gray-500">
+                <span>Configured rent and utilities:</span>
+                <span className="font-semibold text-gray-700">
+                  KES {(
+                    (selectedUnit?.rent_amount || 0) +
+                    (selectedUnit?.garbage_fee || 0) +
+                    (selectedUnit?.parking_fee || 0) +
+                    (selectedUnit?.water_fee || 0)
+                  ).toLocaleString()}
+                </span>
+              </div>
             </div>
 
             <button

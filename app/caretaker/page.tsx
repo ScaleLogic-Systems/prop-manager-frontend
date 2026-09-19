@@ -9,8 +9,7 @@ import {
   History, 
   Wrench,
   DollarSign,
-  LogOut,
-  Receipt
+  LogOut
 } from 'lucide-react';
 
 import { DashboardTab } from './tabs/DashboardTab';
@@ -18,7 +17,6 @@ import { MeterReadingTab } from './tabs/MeterReadingTab';
 import { AddTenantTab } from './tabs/AddTenantTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
-import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
 
 export type CaretakerTab = 
   | 'dashboard' 
@@ -41,7 +39,6 @@ export default function CaretakerPortalPage() {
   const [activeTab, setActiveTab] = useState<CaretakerTab>('dashboard');
   const [profile, setProfile] = useState<CaretakerProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -184,13 +181,6 @@ export default function CaretakerPortalPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => setIsInvoiceModalOpen(true)}
-            className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-md shadow-emerald-600/20 shrink-0"
-          >
-            <Receipt size={16} />
-            <span>Generate Invoice</span>
-          </button>
         </div>
 
         {/* Tab Views */}
@@ -201,7 +191,10 @@ export default function CaretakerPortalPage() {
           />
         )}
         {activeTab === 'meter' && (
-          <MeterReadingTab propertyId={profile?.assigned_property_id} />
+          <MeterReadingTab
+            propertyId={profile?.assigned_property_id}
+            profileId={profile?.id}
+          />
         )}
         {activeTab === 'add-tenant' && (
           <AddTenantTab propertyId={profile?.assigned_property_id} />
@@ -214,14 +207,6 @@ export default function CaretakerPortalPage() {
         )}
       </main>
 
-      {/* Invoice Generation Modal */}
-      <GenerateInvoiceModal
-        isOpen={isInvoiceModalOpen}
-        onClose={() => setIsInvoiceModalOpen(false)}
-        creatorRole="caretaker"
-        profileId={profile?.id || ''}
-        propertyId={profile?.assigned_property_id}
-      />
     </div>
   );
 }
