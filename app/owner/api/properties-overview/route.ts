@@ -164,9 +164,13 @@ unit_number,
 
 rent_amount,
 
+deposit_fee,
+
 garbage_fee,
 
 parking_fee,
+
+water_fee,
 
 is_occupied
 
@@ -382,9 +386,13 @@ unitNumber,
 
 rentAmount,
 
+depositFee,
+
 garbageFee,
 
 parkingFee,
+
+waterFee,
 
 } = body;
 
@@ -466,9 +474,13 @@ unit_number: unitNumber,
 
 rent_amount: Number(rentAmount),
 
+deposit_fee: Number(depositFee) || 0,
+
 garbage_fee: garbageFee === null || garbageFee === undefined ? null : Number(garbageFee),
 
 parking_fee: parkingFee === null || parkingFee === undefined ? null : Number(parkingFee),
+
+water_fee: waterFee === null || waterFee === undefined ? null : Number(waterFee),
 
 is_occupied: false,
 
@@ -522,9 +534,13 @@ unitNumber,
 
 rentAmount,
 
+depositFee,
+
 garbageFee,
 
 parkingFee,
+
+waterFee,
 
 } = body;
 
@@ -568,9 +584,13 @@ unit_number: unitNumber,
 
 rent_amount: Number(rentAmount),
 
+deposit_fee: Number(depositFee) || 0,
+
 garbage_fee: garbageFee === null || garbageFee === undefined ? null : Number(garbageFee),
 
 parking_fee: parkingFee === null || parkingFee === undefined ? null : Number(parkingFee),
+
+water_fee: waterFee === null || waterFee === undefined ? null : Number(waterFee),
 
 })
 

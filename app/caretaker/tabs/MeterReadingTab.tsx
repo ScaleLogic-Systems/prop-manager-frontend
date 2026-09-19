@@ -9,6 +9,7 @@ interface DynamicUnit {
   tenant_name: string;
   previous_reading: number;
   water_rate: number;
+  deposit_fee: number;
   rent_amount: number;
   garbage_fee: number;
   parking_fee: number;
@@ -25,9 +26,16 @@ interface GeneratedInvoice {
   total_amount: number;
 }
 
-export const MeterReadingTab: React.FC<{ propertyId?: string; profileId?: string }> = ({
+export const MeterReadingTab: React.FC<{
+  propertyId?: string;
+  profileId?: string;
+  apiBasePath?: string;
+  creatorRole?: 'owner' | 'caretaker';
+}> = ({
   propertyId,
   profileId,
+  apiBasePath = '/caretaker/api/unit-meter-readings',
+  creatorRole = 'caretaker',
 }) => {
   const [units, setUnits] = useState<DynamicUnit[]>([]);
   const [selectedUnitId, setSelectedUnitId] = useState<string>('');
@@ -43,7 +51,7 @@ export const MeterReadingTab: React.FC<{ propertyId?: string; profileId?: string
       try {
         setFetchingUnits(true);
         const queryParam = propertyId ? `?property_id=${propertyId}` : '';
-        const res = await fetch(`/caretaker/api/unit-meter-readings${queryParam}`);
+        const res = await fetch(`${apiBasePath}${queryParam}`);
         if (res.ok) {
           const data = await res.json();
           setUnits(data.units || []);
@@ -59,7 +67,7 @@ export const MeterReadingTab: React.FC<{ propertyId?: string; profileId?: string
     };
 
     fetchUnitReadings();
-  }, [propertyId]);
+  }, [apiBasePath, propertyId]);
 
   const selectedUnit = units.find((u) => u.id === selectedUnitId);
 
@@ -82,7 +90,7 @@ export const MeterReadingTab: React.FC<{ propertyId?: string; profileId?: string
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           profile_id: profileId,
-          creator_role: 'caretaker',
+          creator_role: creatorRole,
           unit_id: selectedUnit.id,
           unit_number: selectedUnit.unit_number,
           tenant_name: selectedUnit.tenant_name,
@@ -191,16 +199,12 @@ export const MeterReadingTab: React.FC<{ propertyId?: string; profileId?: string
                 <span className="text-gray-600">Configured water rate:</span>
                 <span className="font-bold text-gray-800">KES {selectedUnit?.water_rate || 0} / unit</span>
               </div>
-              <div className="flex justify-between items-center text-xs text-gray-500">
-                <span>Configured rent and utilities:</span>
-                <span className="font-semibold text-gray-700">
-                  KES {(
-                    (selectedUnit?.rent_amount || 0) +
-                    (selectedUnit?.garbage_fee || 0) +
-                    (selectedUnit?.parking_fee || 0) +
-                    (selectedUnit?.water_fee || 0)
-                  ).toLocaleString()}
-                </span>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 pt-2 border-t border-gray-200 text-xs text-gray-500">
+                <span>Rent: <strong className="text-gray-700">KES {(selectedUnit?.rent_amount || 0).toLocaleString()}</strong></span>
+                <span>Deposit: <strong className="text-gray-700">KES {(selectedUnit?.deposit_fee || 0).toLocaleString()}</strong></span>
+                <span>Garbage: <strong className="text-gray-700">KES {(selectedUnit?.garbage_fee || 0).toLocaleString()}</strong></span>
+                <span>Parking: <strong className="text-gray-700">KES {(selectedUnit?.parking_fee || 0).toLocaleString()}</strong></span>
+                <span>Water fee: <strong className="text-gray-700">KES {(selectedUnit?.water_fee || 0).toLocaleString()}</strong></span>
               </div>
             </div>
 

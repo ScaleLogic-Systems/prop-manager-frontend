@@ -5,6 +5,7 @@ import { OwnerTab } from '../types';
 import {
   LayoutDashboard,
   PlusSquare,
+  Gauge,
   Users,
   UserCheck,
   AlertCircle,
@@ -30,6 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
 
   const navItems: { id: OwnerTab; label: string; icon: React.ElementType }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'meter-reading', label: 'Meter Readings', icon: Gauge },
     { id: 'add-property', label: 'Add Property', icon: PlusSquare },
     { id: 'users', label: 'User Management', icon: Users },
     { id: 'tenants', label: 'Tenants', icon: UserCheck },

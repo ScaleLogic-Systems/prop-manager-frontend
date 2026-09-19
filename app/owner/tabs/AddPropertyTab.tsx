@@ -8,6 +8,7 @@ interface Unit {
   property_id: string;
   unit_number: string;
   rent_amount: number;
+  deposit_fee: number | null;
   garbage_fee: number | null;
   parking_fee: number | null;
   water_fee: number | null;
@@ -32,6 +33,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
 
   const [unitNumber, setUnitNumber] = useState("");
   const [rentAmount, setRentAmount] = useState<number | "">("");
+  const [depositFee, setDepositFee] = useState<number | "">("");
 
   // Fees state
   const [garbageFee, setGarbageFee] = useState<number | "">(0);
@@ -56,6 +58,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [editUnitNumber, setEditUnitNumber] = useState("");
   const [editRentAmount, setEditRentAmount] = useState<number | "">("");
+  const [editDepositFee, setEditDepositFee] = useState<number | "">("");
 
   const [editGarbageFee, setEditGarbageFee] = useState<number | "">(0);
   const [isEditGarbageNA, setIsEditGarbageNA] = useState(false);
@@ -118,6 +121,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         location: location.trim(),
         unitNumber: unitNumber.trim(),
         rentAmount: Number(rentAmount) || 0,
+        depositFee: Number(depositFee) || 0,
         garbageFee: isGarbageNA ? null : Number(garbageFee) || 0,
         parkingFee: isParkingNA ? null : Number(parkingFee) || 0,
         waterFee: isWaterNA ? null : Number(waterFee) || 0,
@@ -147,6 +151,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
       setFormSuccess(`Successfully saved ${payload.propertyName} - Unit ${payload.unitNumber}`);
       setUnitNumber("");
       setRentAmount("");
+      setDepositFee("");
 
       // Reset fees
       setGarbageFee(0);
@@ -168,6 +173,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
     setEditingUnit(unit);
     setEditUnitNumber(unit.unit_number);
     setEditRentAmount(unit.rent_amount ?? "");
+    setEditDepositFee(unit.deposit_fee ?? "");
 
     setIsEditGarbageNA(unit.garbage_fee === null);
     setEditGarbageFee(unit.garbage_fee === null ? "" : unit.garbage_fee);
@@ -193,6 +199,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         unitId: editingUnit.id,
         unitNumber: editUnitNumber.trim(),
         rentAmount: Number(editRentAmount) || 0,
+        depositFee: Number(editDepositFee) || 0,
         garbageFee: isEditGarbageNA ? null : Number(editGarbageFee) || 0,
         parkingFee: isEditParkingNA ? null : Number(editParkingFee) || 0,
         waterFee: isEditWaterNA ? null : Number(editWaterFee) || 0,
@@ -291,6 +298,18 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                 className="w-full border rounded p-2 mt-1"
                 value={rentAmount}
                 onChange={(e) => setRentAmount(e.target.value ? Number(e.target.value) : "")}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Security Deposit (KES) *</label>
+              <input
+                type="number"
+                min="0"
+                required
+                className="w-full border rounded p-2 mt-1"
+                value={depositFee}
+                onChange={(e) => setDepositFee(e.target.value ? Number(e.target.value) : "")}
               />
             </div>
 
@@ -441,6 +460,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                           <th className="p-3">Unit Number</th>
                           <th className="p-3">Status</th>
                           <th className="p-3">Rent (KES)</th>
+                          <th className="p-3">Deposit</th>
                           <th className="p-3">Garbage</th>
                           <th className="p-3">Parking</th>
                           <th className="p-3">Water Fee / Meter</th>
@@ -463,6 +483,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                               </span>
                             </td>
                             <td className="p-3">KES {unit.rent_amount?.toLocaleString()}</td>
+                            <td className="p-3">KES {unit.deposit_fee?.toLocaleString() || "0"}</td>
                             <td className="p-3">
                               {unit.garbage_fee === null ? "N/A" : `KES ${unit.garbage_fee?.toLocaleString()}`}
                             </td>
@@ -534,6 +555,18 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                   className="w-full border rounded p-2 mt-1"
                   value={editRentAmount}
                   onChange={(e) => setEditRentAmount(e.target.value ? Number(e.target.value) : "")}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Security Deposit (KES) *</label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  className="w-full border rounded p-2 mt-1"
+                  value={editDepositFee}
+                  onChange={(e) => setEditDepositFee(e.target.value ? Number(e.target.value) : "")}
                 />
               </div>
 

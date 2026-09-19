@@ -2,6 +2,7 @@
 
 export type OwnerTab =
   | 'dashboard'
+  | 'meter-reading'
   | 'add-property'
   | 'users'
   | 'tenants'

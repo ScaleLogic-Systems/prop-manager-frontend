@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Receipt } from 'lucide-react';
 import { OwnerTab } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -11,14 +10,13 @@ import { UserManagementTab } from './tabs/UserManagementTab';
 import { TenantsTab } from './tabs/TenantsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import { SubscriptionsTab } from './tabs/SubscriptionsTab';
+import { MeterReadingTab } from '../caretaker/tabs/MeterReadingTab';
 import { createClient } from '@/lib/supabaseClient';
-import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
 
 export default function OwnerPage() {
   const [activeTab, setActiveTab] = useState<OwnerTab>('dashboard');
   const [ownerFullName, setOwnerFullName] = useState<string>('Property Owner');
   const [currentUserId, setCurrentUserId] = useState<string>('');
-  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -67,6 +65,8 @@ export default function OwnerPage() {
     switch (activeTab) {
       case 'dashboard':
         return <DashboardTab />;
+      case 'meter-reading':
+        return <MeterReadingTab profileId={currentUserId} apiBasePath="/owner/api/unit-meter-readings" creatorRole="owner" />;
       case 'add-property':
         return <AddPropertyTab currentUserId={currentUserId} />;
       case 'users':
@@ -94,13 +94,6 @@ export default function OwnerPage() {
           <div className="flex-1">
             <Header fullName={ownerFullName} />
           </div>
-          <button
-            onClick={() => setIsInvoiceModalOpen(true)}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-md shadow-amber-500/20 shrink-0"
-          >
-            <Receipt size={16} />
-            <span>Generate Invoice</span>
-          </button>
         </div>
 
         {/* TAB CONTENT WRAPPER */}
@@ -109,13 +102,6 @@ export default function OwnerPage() {
         </div>
       </main>
 
-      {/* Invoice Generation Modal */}
-      <GenerateInvoiceModal
-        isOpen={isInvoiceModalOpen}
-        onClose={() => setIsInvoiceModalOpen(false)}
-        creatorRole="owner"
-        profileId={currentUserId}
-      />
     </div>
   );
 }
