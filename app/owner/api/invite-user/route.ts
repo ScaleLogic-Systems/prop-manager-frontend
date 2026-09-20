@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, getSupabaseAdmin } from '@/lib/supabaseServer';
+import { resend, FROM_EMAIL } from '@/lib/resend';
 
 interface Profile {
   id: string;
@@ -360,7 +361,6 @@ export async function POST(request: Request) {
       email: email,
       phone: phone,
       role: dbRole,
-      status: 'active',
       must_change_password: true,
       created_at: new Date().toISOString(),
     });
@@ -408,12 +408,50 @@ export async function POST(request: Request) {
       }
     }
 
-    // 7. Return temporary password so UI can display it or send via SMS
+    const origin = new URL(request.url).origin;
+    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
+      type: 'magiclink',
+      email,
+      options: { redirectTo: `${origin}/auth/callback?next=/auth/change-password` },
+    });
+
+    if (linkError || !linkData.properties?.action_link) {
+      console.error('[CREATE_INVITATION_LINK_ERROR]', linkError?.message);
+      return NextResponse.json(
+        { error: linkError?.message || 'Failed to create invitation link.' },
+        { status: 500 }
+      );
+    }
+
+    const { error: emailError } = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: email,
+      subject: 'Your PropManager account invitation',
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;max-width:600px;margin:auto">
+          <h2>Welcome to PropManager, ${fullName}</h2>
+          <p>An account has been created for you. Use the temporary password below only to complete your first sign-in.</p>
+          <p><strong>Temporary password:</strong> ${tempPassword}</p>
+          <p><a href="${linkData.properties.action_link}" style="display:inline-block;background:#2563eb;color:white;padding:12px 18px;text-decoration:none;border-radius:6px">Set your permanent password</a></p>
+          <p>The link will open a secure page where you must choose a new password before accessing your account.</p>
+          <p><strong>Assigned role:</strong> ${dbRole.replace(/_/g, ' ')}</p>
+          <p>If you did not expect this invitation, contact your property owner.</p>
+        </div>
+      `,
+    });
+
+    if (emailError) {
+      console.error('[SEND_INVITATION_EMAIL_ERROR]', emailError);
+      return NextResponse.json(
+        { error: 'The account was created, but the invitation email could not be sent.' },
+        { status: 502 }
+      );
+    }
+
     return NextResponse.json(
       {
-        message: 'User account created and activated successfully!',
-        tempPassword,
-        user: userData.user,
+        message: 'User account created and invitation email sent successfully.',
+        user: { id: userData.user.id, email: userData.user.email, role: dbRole },
       },
       { status: 201 }
     );

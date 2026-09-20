@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get('type') as EmailOtpType | null;
   const next = searchParams.get('next') ?? '/dashboard';
 
-  let targetUrl = `${origin}${next}`;
+  const targetUrl = `${origin}${next}`;
   let response = NextResponse.redirect(targetUrl);
 
   const supabase = createServerClient(
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     const mustChangePassword = user.user_metadata?.must_change_password === true;
 
     if (mustChangePassword) {
-      const redirectResponse = NextResponse.redirect(`${origin}/auth/update-password`);
+      const redirectResponse = NextResponse.redirect(`${origin}/auth/change-password`);
       
       // Preserve session cookies set during exchange/verification
       response.cookies.getAll().forEach((cookie) => {

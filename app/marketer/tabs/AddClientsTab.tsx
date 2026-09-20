@@ -33,7 +33,7 @@ export const AddClientsTab: React.FC<AddClientsTabProps> = ({ fullName }) => {
     setFeedback(null);
 
     try {
-      const res = await fetch('/api/invite-user', {
+      const res = await fetch('/marketer/api/invite-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -111,7 +111,7 @@ export const AddClientsTab: React.FC<AddClientsTabProps> = ({ fullName }) => {
         <div className="border-b border-gray-100 pb-4 mb-6">
           <h2 className="text-lg font-bold text-gray-900">Client Details</h2>
           <p className="text-xs text-gray-500 mt-1">
-            Fill in the client's information below to provision their account credentials.
+            Fill in the client&apos;s information below to provision their account credentials.
           </p>
         </div>
 

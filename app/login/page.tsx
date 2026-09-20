@@ -34,12 +34,17 @@ export default function LoginPage() {
       if (authData?.user) {
         const { data: profile, error: profileError } = await supabase
           .from("profiles")
-          .select("role")
+          .select("role, must_change_password")
           .eq("id", authData.user.id)
           .maybeSingle();
 
         if (profileError) {
           console.error("Profile fetch error:", profileError);
+        }
+
+        if (authData.user.user_metadata?.must_change_password === true || profile?.must_change_password === true) {
+          router.push("/auth/change-password");
+          return;
         }
 
         const rawRole = profile?.role || "property_manager";
@@ -72,12 +77,14 @@ export default function LoginPage() {
             break;
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Sign-in exception:", err);
       const message =
         typeof err === "string"
           ? err
-          : err?.message || "An unexpected error occurred during sign in.";
+          : err instanceof Error
+            ? err.message
+            : "An unexpected error occurred during sign in.";
       setErrorMsg(message);
     } finally {
       setLoading(false);
@@ -140,7 +147,7 @@ export default function LoginPage() {
 
         <div className="text-center mt-6">
           <p className="text-xs text-slate-400">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <Link href="/signup" className="text-indigo-400 hover:underline font-medium">
               Register here
             </Link>

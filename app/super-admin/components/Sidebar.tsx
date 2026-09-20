@@ -17,7 +17,8 @@ import {
   LogOut,
   Landmark,
   Shield,
-  Sliders
+  Sliders,
+  Home
 } from 'lucide-react';
 import { SuperadminTab } from '../types';
 import { createClient } from '@/lib/supabaseClient';
@@ -44,6 +45,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
         { id: 'dashboard' as SuperadminTab, label: 'Overview Dashboard', icon: LayoutDashboard },
         { id: 'subscribers' as SuperadminTab, label: 'Subscribers & Agencies', icon: Users },
         { id: 'add-users' as SuperadminTab, label: 'User Onboarding', icon: UserPlus },
+        { id: 'add-property' as SuperadminTab, label: 'Add Property', icon: Home },
         { id: 'saas-invoicing' as SuperadminTab, label: 'SaaS Invoicing', icon: FileText },
         { id: 'kra-etims' as SuperadminTab, label: 'KRA eTIMS Config', icon: Landmark },
       ],

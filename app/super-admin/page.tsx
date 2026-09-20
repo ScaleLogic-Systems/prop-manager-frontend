@@ -10,6 +10,7 @@ import { SuperadminTab } from './types';
 import { DashboardTab } from './tabs/DashboardTab';
 import { SubscribersTab } from './tabs/SubscribersTab';
 import { AddUsersTab } from './tabs/AddUsersTab';
+import { AddPropertyTab } from './tabs/AddPropertyTab';
 import { GenerateInvoiceTab } from './tabs/GenerateInvoiceTab';
 import { KraEtimsTab } from './tabs/KraEtimsTab';
 import { UnassignedPaymentsHubTab } from './tabs/UnassignedPaymentsHubTab';
@@ -39,6 +40,7 @@ export default function SuperAdminDashboard() {
           {activeTab === 'dashboard' && <DashboardTab />}
           {activeTab === 'subscribers' && <SubscribersTab />}
           {activeTab === 'add-users' && <AddUsersTab />}
+          {activeTab === 'add-property' && <AddPropertyTab />}
           {(activeTab === 'saas-invoicing' || activeTab === 'generate-invoice') && <GenerateInvoiceTab />}
           {activeTab === 'kra-etims' && <KraEtimsTab />}
           {(activeTab === 'payments-overview' || activeTab === 'unassigned-payments-hub') && (

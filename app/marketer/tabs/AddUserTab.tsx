@@ -10,12 +10,11 @@ interface AddUserTabProps {
 }
 
 export const AddUserTab: React.FC<AddUserTabProps> = ({
-  currentUserId,
   fullName: marketerFullName,
 }) => {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'agent' | 'property_manager' | 'accountant'>('agent');
+  const [role, setRole] = useState<'tenant' | 'property_manager' | 'accountant'>('tenant');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -25,12 +24,18 @@ export const AddUserTab: React.FC<AddUserTabProps> = ({
     setMessage(null);
 
     try {
-      // Invite logic here utilizing currentUserId/marketerFullName as necessary
-      setMessage({ type: 'success', text: `User ${fullName} invited successfully.` });
+      const response = await fetch('/marketer/api/invite-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ full_name: fullName, email, role }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to invite user.');
+      setMessage({ type: 'success', text: `Account created and invitation sent to ${email}.` });
       setEmail('');
       setFullName('');
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to invite user.' });
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to invite user.' });
     } finally {
       setLoading(false);
     }
@@ -92,10 +97,10 @@ export const AddUserTab: React.FC<AddUserTabProps> = ({
           <label className="block font-medium text-gray-700 mb-1">Assign Role</label>
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value as any)}
+            onChange={(e) => setRole(e.target.value as 'tenant' | 'property_manager' | 'accountant')}
             className="w-full px-3 py-2 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
           >
-            <option value="agent">Agent</option>
+            <option value="tenant">Tenant</option>
             <option value="property_manager">Property Manager</option>
             <option value="accountant">Accountant</option>
           </select>

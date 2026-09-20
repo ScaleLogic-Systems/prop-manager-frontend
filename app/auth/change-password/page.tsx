@@ -57,8 +57,20 @@ export default function ChangePasswordPage() {
       .eq('id', user.id)
       .single();
 
-    const role = profile?.role || 'tenant';
-    router.push(role === 'owner' ? '/owner/dashboard' : '/tenant/dashboard');
+    const role = String(profile?.role || 'tenant').toLowerCase().trim().replace(/\s+/g, '_');
+    const destinations: Record<string, string> = {
+      super_admin: '/super-admin',
+      property_manager: '/property-manager',
+      owner: '/owner',
+      property_owner: '/owner',
+      landlord: '/owner',
+      caretaker: '/caretaker',
+      tenant: '/tenant',
+      developer: '/developer',
+      marketer: '/marketer',
+      accountant: '/accountant',
+    };
+    router.push(destinations[role] || '/property-manager');
   };
 
   return (

@@ -5,6 +5,7 @@ export type SuperadminTab =
   | 'dashboard'
   | 'subscribers'
   | 'add-users'
+  | 'add-property'
   | 'generate-invoice'
   | 'saas-invoicing'
   | 'kra-etims'

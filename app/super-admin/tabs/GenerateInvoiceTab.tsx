@@ -1,3 +1,4 @@
+// app/super-admin/tabs/GenerateInvoiceTab.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -49,70 +50,82 @@ export const GenerateInvoiceTab: React.FC = () => {
     }
   };
 
-  async function fetchSubscribersWithOccupiedUnits() {
-    setLoading(true);
-    try {
-      // Fetch users with subscriber roles
-      const { data: users, error: usersError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, phone')
-        .in('role', ['property_manager', 'property_owner']);
-
-      if (usersError) throw usersError;
-
-      if (!users || users.length === 0) {
-        setSubscribers([]);
-        setLoading(false);
-        return;
-      }
-
-      const userIds = users.map((u) => u.id);
-
-      // Fetch properties for these subscribers
-      const { data: properties } = await supabase
-        .from('properties')
-        .select('id, name, user_id')
-        .in('user_id', userIds);
-
-      const propertyIds = properties?.map((p) => p.id) || [];
-
-      // Fetch active tenancies / occupied units for these properties
-      const { data: occupiedUnitsData } = await supabase
-        .from('units')
-        .select('id, property_id, status')
-        .in('property_id', propertyIds)
-        .eq('status', 'OCCUPIED');
-
-      const formatted: SubscriberInvoiceData[] = users.map((user) => {
-        const userProps = properties?.filter((p) => p.user_id === user.id) || [];
-        const userPropIds = userProps.map((p) => p.id);
-        
-        const occupiedCount =
-          occupiedUnitsData?.filter((u) => userPropIds.includes(u.property_id)).length || 0;
-
-        return {
-          id: user.id,
-          full_name: user.full_name || 'Unnamed Subscriber',
-          email: user.email,
-          phone: user.phone || '',
-          propertyNames: userProps.map((p) => p.name),
-          occupiedUnits: occupiedCount,
-        };
-      });
-
-      setSubscribers(formatted);
-      if (formatted.length > 0) {
-        handleSubscriberSelect(formatted[0].id, formatted);
-      }
-    } catch (err) {
-      console.error('Error fetching subscriber occupied units:', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
+    let ignore = false;
+
+    async function fetchSubscribersWithOccupiedUnits() {
+      setLoading(true);
+      try {
+        // Fetch users with subscriber roles
+        const { data: users, error: usersError } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, phone')
+          .in('role', ['property_manager', 'property_owner']);
+
+        if (usersError) throw usersError;
+
+        if (!users || users.length === 0) {
+          if (!ignore) {
+            setSubscribers([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        const userIds = users.map((u) => u.id);
+
+        // Fetch properties for these subscribers
+        const { data: properties } = await supabase
+          .from('properties')
+          .select('id, name, user_id')
+          .in('user_id', userIds);
+
+        const propertyIds = properties?.map((p) => p.id) || [];
+
+        // Fetch active tenancies / occupied units for these properties
+        const { data: occupiedUnitsData } = await supabase
+          .from('units')
+          .select('id, property_id, status')
+          .in('property_id', propertyIds)
+          .eq('status', 'OCCUPIED');
+
+        const formatted: SubscriberInvoiceData[] = users.map((user) => {
+          const userProps = properties?.filter((p) => p.user_id === user.id) || [];
+          const userPropIds = userProps.map((p) => p.id);
+          
+          const occupiedCount =
+            occupiedUnitsData?.filter((u) => userPropIds.includes(u.property_id)).length || 0;
+
+          return {
+            id: user.id,
+            full_name: user.full_name || 'Unnamed Subscriber',
+            email: user.email,
+            phone: user.phone || '',
+            propertyNames: userProps.map((p) => p.name),
+            occupiedUnits: occupiedCount,
+          };
+        });
+
+        if (!ignore) {
+          setSubscribers(formatted);
+          if (formatted.length > 0) {
+            handleSubscriberSelect(formatted[0].id, formatted);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching subscriber occupied units:', err);
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
     fetchSubscribersWithOccupiedUnits();
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const selectedSubscriber = subscribers.find((s) => s.id === selectedSubscriberId);
