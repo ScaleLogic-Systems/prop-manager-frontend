@@ -1,8 +1,24 @@
 // app/api/etims/credit-note/route.ts
 
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
-import { calculateInvoiceTaxes, BillingItemType } from '@/lib/etims/tax-engine';
+import { createServerSupabaseClient, getSupabaseAdmin } from '@/lib/supabaseServer';
+
+interface EtimsLineItem {
+  item_type?: string;
+  itemType?: string;
+  description: string;
+  quantity: number;
+  unit_price?: number;
+  unitPrice?: number;
+  taxable_amount?: number;
+  taxableAmount?: number;
+  vat_amount?: number;
+  vatAmount?: number;
+  total_amount?: number;
+  totalAmount?: number;
+  tax_category?: string;
+  taxCategory?: string;
+}
 
 export async function POST(request: Request) {
   try {
@@ -15,6 +31,13 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    const authClient = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
+    }
+    const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY ? getSupabaseAdmin() : authClient;
 
     // 1. Fetch Original Invoice
     const { data: invoice, error: invoiceError } = await supabase
@@ -36,12 +59,12 @@ export async function POST(request: Request) {
 
     // 2. Fetch Agency KRA Credentials
     const { data: agency, error: agencyError } = await supabase
-      .from('organizations')
-      .select('agency_name, kra_pin, branch_id, etims_enabled')
-      .eq('id', profile_id)
+      .from('agency_etims_configs')
+      .select('profile_id, kra_pin, branch_code, is_enabled')
+      .eq('profile_id', profile_id)
       .single();
 
-    if (agencyError || !agency || !agency.etims_enabled) {
+    if (agencyError || !agency || !agency.is_enabled) {
       return NextResponse.json(
         { error: 'eTIMS integration is disabled for this organization.' },
         { status: 400 }
@@ -53,32 +76,32 @@ export async function POST(request: Request) {
     // 3. Construct KRA eTIMS Credit Note Payload
     const etimsCreditNotePayload = {
       tin: agency.kra_pin,
-      bhfId: agency.branch_id || '00',
+      bhfId: agency.branch_code || '00',
       invcNo: creditNoteId,
       orgInvcNo: invoice.cu_invoice_number, // Must reference original KRA CUIN
-      custTin: invoice.tenant_kra_pin || '',
-      custNm: invoice.tenant_name,
+      custTin: invoice.customer_kra_pin || '',
+      custNm: invoice.customer_name,
       salesSttsCd: '02', // Normal Reversal
       receptTyCd: 'C',  // 'C' = Credit Note
       pmtTyCd: '01',
       totItemCnt: invoice.invoice_items?.length || 1,
-      taxblAmtA: invoice.tax_type === 'A_EXEMPT' ? invoice.amount : 0,
-      taxblAmtB: invoice.tax_type === 'B_STANDARD_16' ? (invoice.amount - (invoice.vat_amount || 0)) : 0,
+      taxblAmtA: invoice.exempt_amount || 0,
+      taxblAmtB: invoice.taxable_amount || 0,
       taxAmtB: invoice.vat_amount || 0,
-      totTaxblAmt: invoice.amount - (invoice.vat_amount || 0),
+      totTaxblAmt: invoice.taxable_amount || 0,
       totTaxAmt: invoice.vat_amount || 0,
-      totAmt: invoice.amount,
+      totAmt: invoice.grand_total,
       remark: description || `Credit Note issued for Invoice ${invoice.id} (${reason})`,
-      itemList: (invoice.invoice_items || []).map((item: any, idx: number) => ({
+      itemList: (invoice.line_items || invoice.invoice_items || []).map((item: EtimsLineItem, idx: number) => ({
         itemSeq: idx + 1,
-        itemCd: item.item_type,
+        itemCd: item.item_type || item.itemType,
         itemNm: `[CREDIT NOTE] ${item.description}`,
         qty: item.quantity,
-        prc: item.unit_price,
-        splyAmt: item.taxable_amount,
-        taxTyCd: item.tax_category === 'B_STANDARD_16' ? 'B' : 'A',
-        taxAmt: item.vat_amount,
-        totAmt: item.total_amount,
+        prc: item.unit_price ?? item.unitPrice,
+        splyAmt: item.taxable_amount ?? item.taxableAmount,
+        taxTyCd: (item.tax_category || item.taxCategory) === 'B_STANDARD_16' ? 'B' : 'A',
+        taxAmt: item.vat_amount ?? item.vatAmount,
+        totAmt: item.total_amount ?? item.totalAmount,
       })),
     };
 
@@ -110,7 +133,7 @@ export async function POST(request: Request) {
             id: creditNoteId,
             invoice_id: invoice.id,
             profile_id,
-            amount: invoice.amount,
+            amount: invoice.grand_total,
             vat_amount: invoice.vat_amount || 0,
             reason,
             description,

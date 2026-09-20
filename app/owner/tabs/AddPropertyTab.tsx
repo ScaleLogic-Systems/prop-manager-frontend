@@ -9,6 +9,9 @@ interface Unit {
   unit_number: string;
   rent_amount: number;
   deposit_fee: number | null;
+  use_type: 'residential' | 'commercial' | 'mixed' | 'other';
+  vat_treatment: 'A_EXEMPT' | 'B_STANDARD_16' | 'C_ZERO_RATED' | 'E_NON_VAT';
+  vat_rate: number;
   garbage_fee: number | null;
   parking_fee: number | null;
   water_fee: number | null;
@@ -34,6 +37,9 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
   const [unitNumber, setUnitNumber] = useState("");
   const [rentAmount, setRentAmount] = useState<number | "">("");
   const [depositFee, setDepositFee] = useState<number | "">("");
+  const [useType, setUseType] = useState<Unit['use_type']>('residential');
+  const [vatTreatment, setVatTreatment] = useState<Unit['vat_treatment']>('A_EXEMPT');
+  const [vatRate, setVatRate] = useState<number | "">(0);
 
   // Fees state
   const [garbageFee, setGarbageFee] = useState<number | "">(0);
@@ -59,6 +65,9 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
   const [editUnitNumber, setEditUnitNumber] = useState("");
   const [editRentAmount, setEditRentAmount] = useState<number | "">("");
   const [editDepositFee, setEditDepositFee] = useState<number | "">("");
+  const [editUseType, setEditUseType] = useState<Unit['use_type']>('residential');
+  const [editVatTreatment, setEditVatTreatment] = useState<Unit['vat_treatment']>('A_EXEMPT');
+  const [editVatRate, setEditVatRate] = useState<number | "">(0);
 
   const [editGarbageFee, setEditGarbageFee] = useState<number | "">(0);
   const [isEditGarbageNA, setIsEditGarbageNA] = useState(false);
@@ -122,6 +131,9 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         unitNumber: unitNumber.trim(),
         rentAmount: Number(rentAmount) || 0,
         depositFee: Number(depositFee) || 0,
+        useType,
+        vatTreatment,
+        vatRate: Number(vatRate) || 0,
         garbageFee: isGarbageNA ? null : Number(garbageFee) || 0,
         parkingFee: isParkingNA ? null : Number(parkingFee) || 0,
         waterFee: isWaterNA ? null : Number(waterFee) || 0,
@@ -152,6 +164,9 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
       setUnitNumber("");
       setRentAmount("");
       setDepositFee("");
+      setUseType('residential');
+      setVatTreatment('A_EXEMPT');
+      setVatRate(0);
 
       // Reset fees
       setGarbageFee(0);
@@ -174,6 +189,9 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
     setEditUnitNumber(unit.unit_number);
     setEditRentAmount(unit.rent_amount ?? "");
     setEditDepositFee(unit.deposit_fee ?? "");
+    setEditUseType(unit.use_type);
+    setEditVatTreatment(unit.vat_treatment);
+    setEditVatRate(unit.vat_rate ?? 0);
 
     setIsEditGarbageNA(unit.garbage_fee === null);
     setEditGarbageFee(unit.garbage_fee === null ? "" : unit.garbage_fee);
@@ -200,6 +218,9 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         unitNumber: editUnitNumber.trim(),
         rentAmount: Number(editRentAmount) || 0,
         depositFee: Number(editDepositFee) || 0,
+        useType: editUseType,
+        vatTreatment: editVatTreatment,
+        vatRate: Number(editVatRate) || 0,
         garbageFee: isEditGarbageNA ? null : Number(editGarbageFee) || 0,
         parkingFee: isEditParkingNA ? null : Number(editParkingFee) || 0,
         waterFee: isEditWaterNA ? null : Number(editWaterFee) || 0,
@@ -310,6 +331,49 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                 className="w-full border rounded p-2 mt-1"
                 value={depositFee}
                 onChange={(e) => setDepositFee(e.target.value ? Number(e.target.value) : "")}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Unit Use *</label>
+              <select
+                required
+                className="w-full border rounded p-2 mt-1 bg-white"
+                value={useType}
+                onChange={(e) => setUseType(e.target.value as Unit['use_type'])}
+              >
+                <option value="residential">Residential</option>
+                <option value="commercial">Commercial</option>
+                <option value="mixed">Mixed</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">VAT Treatment *</label>
+              <select
+                required
+                className="w-full border rounded p-2 mt-1 bg-white"
+                value={vatTreatment}
+                onChange={(e) => setVatTreatment(e.target.value as Unit['vat_treatment'])}
+              >
+                <option value="A_EXEMPT">Exempt</option>
+                <option value="B_STANDARD_16">Standard 16%</option>
+                <option value="C_ZERO_RATED">Zero-rated</option>
+                <option value="E_NON_VAT">Non-VAT</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">VAT Rate (decimal)</label>
+              <input
+                type="number"
+                min="0"
+                max="1"
+                step="0.01"
+                className="w-full border rounded p-2 mt-1"
+                value={vatRate}
+                onChange={(e) => setVatRate(e.target.value ? Number(e.target.value) : 0)}
               />
             </div>
 
@@ -461,6 +525,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                           <th className="p-3">Status</th>
                           <th className="p-3">Rent (KES)</th>
                           <th className="p-3">Deposit</th>
+                          <th className="p-3">Use</th>
                           <th className="p-3">Garbage</th>
                           <th className="p-3">Parking</th>
                           <th className="p-3">Water Fee / Meter</th>
@@ -484,6 +549,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                             </td>
                             <td className="p-3">KES {unit.rent_amount?.toLocaleString()}</td>
                             <td className="p-3">KES {unit.deposit_fee?.toLocaleString() || "0"}</td>
+                            <td className="p-3 capitalize">{unit.use_type}</td>
                             <td className="p-3">
                               {unit.garbage_fee === null ? "N/A" : `KES ${unit.garbage_fee?.toLocaleString()}`}
                             </td>
@@ -567,6 +633,49 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                   className="w-full border rounded p-2 mt-1"
                   value={editDepositFee}
                   onChange={(e) => setEditDepositFee(e.target.value ? Number(e.target.value) : "")}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Unit Use *</label>
+                <select
+                  required
+                  className="w-full border rounded p-2 mt-1 bg-white"
+                  value={editUseType}
+                  onChange={(e) => setEditUseType(e.target.value as Unit['use_type'])}
+                >
+                  <option value="residential">Residential</option>
+                  <option value="commercial">Commercial</option>
+                  <option value="mixed">Mixed</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">VAT Treatment *</label>
+                <select
+                  required
+                  className="w-full border rounded p-2 mt-1 bg-white"
+                  value={editVatTreatment}
+                  onChange={(e) => setEditVatTreatment(e.target.value as Unit['vat_treatment'])}
+                >
+                  <option value="A_EXEMPT">Exempt</option>
+                  <option value="B_STANDARD_16">Standard 16%</option>
+                  <option value="C_ZERO_RATED">Zero-rated</option>
+                  <option value="E_NON_VAT">Non-VAT</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">VAT Rate (decimal)</label>
+                <input
+                  type="number"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  className="w-full border rounded p-2 mt-1"
+                  value={editVatRate}
+                  onChange={(e) => setEditVatRate(e.target.value ? Number(e.target.value) : 0)}
                 />
               </div>
 

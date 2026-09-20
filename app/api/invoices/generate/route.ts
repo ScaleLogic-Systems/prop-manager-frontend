@@ -1,7 +1,7 @@
 // app/api/invoices/generate/route.ts
 
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+import { createServerSupabaseClient, getSupabaseAdmin } from '@/lib/supabaseServer';
 import { processInvoiceForEtims } from '@/lib/etimsService';
 import { calculateInvoiceTaxes, BillingItemType } from '@/lib/etims/tax-engine';
 
@@ -34,6 +34,13 @@ function mapToBillingItemType(invoiceType: string): BillingItemType {
 
 export async function POST(request: Request) {
   try {
+    const authClient = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
+    }
+
+    const db = process.env.SUPABASE_SERVICE_ROLE_KEY ? getSupabaseAdmin() : authClient;
     const body = await request.json();
     const {
       profile_id,
@@ -77,30 +84,53 @@ export async function POST(request: Request) {
     ]);
 
     const primaryItem = taxSummary.items[0];
-    const invoiceId = `INV-${invoice_type.toUpperCase().slice(0, 3)}-${Date.now()}`;
+    const billingMonth = new Date().toISOString().slice(0, 7) + '-01';
+    const invoiceNumber = `INV-${invoice_type.toUpperCase().slice(0, 3)}-${Date.now()}`;
+    let propertyId = body.property_id || null;
+
+    if (unit_id) {
+      const { data: unit, error: unitError } = await db
+        .from('units')
+        .select('property_id')
+        .eq('id', unit_id)
+        .single();
+
+      if (unitError || !unit) {
+        return NextResponse.json({ error: 'Unit not found.' }, { status: 404 });
+      }
+
+      propertyId = unit.property_id;
+    }
 
     // 4. Insert record into Supabase invoices table with tax compliance fields
-    const { data: invoiceRecord, error: dbError } = await supabase
+    const { data: invoiceRecord, error: dbError } = await db
       .from('invoices')
       .insert([
         {
-          id: invoiceId,
-          profile_id,
-          creator_role,
+          invoice_number: invoiceNumber,
+          billing_month: billingMonth,
+          issued_by: user.id,
+          issuer_profile_id: user.id,
           unit_id: unit_id || null,
-          unit_number,
-          tenant_name,
+          property_id: propertyId,
+          customer_name: tenant_name || '',
+          customer_kra_pin: tenant_kra_pin || null,
           invoice_type,
-          previous_reading: invoice_type === 'water' ? previous_reading : null,
-          current_reading: invoice_type === 'water' ? current_reading : null,
-          units_consumed: invoice_type === 'water' ? units_consumed : null,
-          rate_per_unit: invoice_type === 'water' ? rate_per_unit : null,
-          amount: taxSummary.grandTotal,
+          rent_amount: invoice_type === 'rent' ? Number(amount) : 0,
+          water_bill: invoice_type === 'water' ? taxSummary.grandTotal : 0,
+          garbage_fee: 0,
+          parking_fee: 0,
+          subtotal_amount: taxSummary.subtotalTaxable + taxSummary.subtotalExempt,
+          taxable_amount: taxSummary.subtotalTaxable,
+          exempt_amount: taxSummary.subtotalExempt,
+          non_vat_amount: invoice_type === 'deposit' ? taxSummary.subtotalExempt : 0,
           vat_amount: taxSummary.totalVat,
-          tenant_kra_pin: tenant_kra_pin || null,
-          tax_type: primaryItem.taxCategory,
+          grand_total: taxSummary.grandTotal,
+          line_items: taxSummary.items,
+          tax_summary: taxSummary,
           etims_status: 'pending_transmission',
           status: 'sent',
+          due_date: body.due_date || null,
         },
       ])
       .select()
@@ -112,9 +142,9 @@ export async function POST(request: Request) {
     }
 
     // 5. Insert granular line items into invoice_items table for eTIMS auditing
-    const { error: itemsError } = await supabase.from('invoice_items').insert([
+    const { error: itemsError } = await db.from('invoice_items').insert([
       {
-        invoice_id: invoiceId,
+        invoice_id: invoiceRecord.id,
         item_type: mappedItemType,
         description: primaryItem.description,
         quantity: primaryItem.quantity,
@@ -131,9 +161,22 @@ export async function POST(request: Request) {
       console.error('Database insert error (invoice_items):', itemsError);
     }
 
+    if (invoice_type === 'water' && unit_id) {
+      const { error: readingError } = await db.from('meter_readings').insert({
+        unit_id,
+        recorded_by: user.id,
+        previous_reading: Number(previous_reading || 0),
+        current_reading: Number(current_reading),
+      });
+
+      if (readingError) {
+        console.error('Database insert error (meter_readings):', readingError);
+      }
+    }
+
     // 6. Non-blocking eTIMS Sync with fully-calculated tax metadata
     if (profile_id) {
-      processInvoiceForEtims(invoiceId, profile_id, {
+      processInvoiceForEtims(invoiceRecord.id, profile_id, {
         amount: taxSummary.grandTotal,
         taxType: primaryItem.taxCategory,
         vatAmount: taxSummary.totalVat,
@@ -146,7 +189,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       message: `${invoice_type.toUpperCase()} invoice generated successfully.`,
       tax_summary: taxSummary,
-      invoice: invoiceRecord || { id: invoiceId, total_amount: taxSummary.grandTotal },
+      invoice: invoiceRecord,
     });
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Server error';

@@ -1,7 +1,24 @@
 // app/api/etims/sign-invoice/route.ts
 
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabaseClient';
+import { createServerSupabaseClient, getSupabaseAdmin } from '@/lib/supabaseServer';
+
+interface EtimsLineItem {
+  item_type?: string;
+  itemType?: string;
+  description: string;
+  quantity: number;
+  unit_price?: number;
+  unitPrice?: number;
+  taxable_amount?: number;
+  taxableAmount?: number;
+  vat_amount?: number;
+  vatAmount?: number;
+  total_amount?: number;
+  totalAmount?: number;
+  tax_category?: string;
+  taxCategory?: string;
+}
 
 export async function POST(request: Request) {
   try {
@@ -14,14 +31,21 @@ export async function POST(request: Request) {
       );
     }
 
+    const authClient = await createServerSupabaseClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
+    }
+    const supabase = process.env.SUPABASE_SERVICE_ROLE_KEY ? getSupabaseAdmin() : authClient;
+
     // 1. Fetch Organization eTIMS Credentials
     const { data: agency, error: agencyError } = await supabase
-      .from('organizations')
-      .select('agency_name, kra_pin, branch_id, etims_enabled')
-      .eq('id', profile_id)
+      .from('agency_etims_configs')
+      .select('profile_id, kra_pin, branch_code, is_enabled')
+      .eq('profile_id', profile_id)
       .single();
 
-    if (agencyError || !agency || !agency.etims_enabled) {
+    if (agencyError || !agency || !agency.is_enabled) {
       await supabase
         .from('invoices')
         .update({
@@ -50,31 +74,31 @@ export async function POST(request: Request) {
     // 3. Construct KRA eTIMS Payload Structure
     const etimsPayload = {
       tin: agency.kra_pin,
-      bhfId: agency.branch_id || '00',
+    bhfId: agency.branch_code || '00',
       invcNo: invoice.id,
       orgInvcNo: invoice.id,
-      custTin: invoice.tenant_kra_pin || '',
-      custNm: invoice.tenant_name,
+      custTin: invoice.customer_kra_pin || '',
+      custNm: invoice.customer_name,
       salesSttsCd: '02', // 02 = Normal Sale
       receptTyCd: 'S',  // S = Sales Invoice
       pmtTyCd: '01',    // 01 = Cash / Electronic Payment
       totItemCnt: invoice.invoice_items?.length || 1,
-      taxblAmtA: invoice.tax_type === 'A_EXEMPT' ? invoice.amount : 0,
-      taxblAmtB: invoice.tax_type === 'B_STANDARD_16' ? (invoice.amount - (invoice.vat_amount || 0)) : 0,
+      taxblAmtA: invoice.exempt_amount || 0,
+      taxblAmtB: invoice.taxable_amount || 0,
       taxAmtB: invoice.vat_amount || 0,
-      totTaxblAmt: invoice.amount - (invoice.vat_amount || 0),
+      totTaxblAmt: invoice.taxable_amount || 0,
       totTaxAmt: invoice.vat_amount || 0,
-      totAmt: invoice.amount,
-      itemList: (invoice.invoice_items || []).map((item: any, idx: number) => ({
+      totAmt: invoice.grand_total,
+      itemList: (invoice.line_items || invoice.invoice_items || []).map((item: EtimsLineItem, idx: number) => ({
         itemSeq: idx + 1,
-        itemCd: item.item_type,
+        itemCd: item.item_type || item.itemType,
         itemNm: item.description,
         qty: item.quantity,
-        prc: item.unit_price,
-        splyAmt: item.taxable_amount,
-        taxTyCd: item.tax_category === 'B_STANDARD_16' ? 'B' : 'A',
-        taxAmt: item.vat_amount,
-        totAmt: item.total_amount,
+        prc: item.unit_price ?? item.unitPrice,
+        splyAmt: item.taxable_amount ?? item.taxableAmount,
+        taxTyCd: (item.tax_category || item.taxCategory) === 'B_STANDARD_16' ? 'B' : 'A',
+        taxAmt: item.vat_amount ?? item.vatAmount,
+        totAmt: item.total_amount ?? item.totalAmount,
       })),
     };
 

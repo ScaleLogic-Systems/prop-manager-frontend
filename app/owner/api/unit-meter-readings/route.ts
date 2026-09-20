@@ -63,16 +63,16 @@ export async function GET(request: NextRequest) {
     if (!units?.length) return NextResponse.json({ units: [] });
 
     const unitIds = units.map((unit) => unit.id);
-    const [{ data: tenants, error: tenantsError }, { data: invoices, error: invoicesError }] = await Promise.all([
+    const [{ data: tenants, error: tenantsError }, { data: readings, error: readingsError }] = await Promise.all([
       db.from('tenants').select('unit_id, profile_id').in('unit_id', unitIds),
-      db.from('invoices')
-        .select('unit_id, current_reading, created_at')
+      db.from('meter_readings')
+        .select('unit_id, current_reading, reading_date, created_at')
         .in('unit_id', unitIds)
-        .eq('invoice_type', 'water')
+        .order('reading_date', { ascending: false })
         .order('created_at', { ascending: false }),
     ]);
     if (tenantsError) throw tenantsError;
-    if (invoicesError) throw invoicesError;
+    if (readingsError) throw readingsError;
 
     const profileIds = (tenants || [])
       .map((tenant) => tenant.profile_id)
@@ -85,9 +85,9 @@ export async function GET(request: NextRequest) {
     const profileMap = new Map((profiles || []).map((profile) => [profile.id, profile.full_name || 'Tenant']));
     const tenantMap = new Map((tenants || []).map((tenant) => [tenant.unit_id, tenant.profile_id]));
     const previousReadingMap = new Map<string, number>();
-    for (const invoice of invoices || []) {
-      if (!previousReadingMap.has(invoice.unit_id)) {
-        previousReadingMap.set(invoice.unit_id, Number(invoice.current_reading || 0));
+    for (const reading of readings || []) {
+      if (!previousReadingMap.has(reading.unit_id)) {
+        previousReadingMap.set(reading.unit_id, Number(reading.current_reading || 0));
       }
     }
 

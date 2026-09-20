@@ -166,6 +166,12 @@ rent_amount,
 
 deposit_fee,
 
+use_type,
+
+vat_treatment,
+
+vat_rate,
+
 garbage_fee,
 
 parking_fee,
@@ -388,6 +394,12 @@ rentAmount,
 
 depositFee,
 
+useType,
+
+vatTreatment,
+
+vatRate,
+
 garbageFee,
 
 parkingFee,
@@ -476,6 +488,12 @@ rent_amount: Number(rentAmount),
 
 deposit_fee: Number(depositFee) || 0,
 
+use_type: useType || "residential",
+
+vat_treatment: vatTreatment || "A_EXEMPT",
+
+vat_rate: Number(vatRate) || 0,
+
 garbage_fee: garbageFee === null || garbageFee === undefined ? null : Number(garbageFee),
 
 parking_fee: parkingFee === null || parkingFee === undefined ? null : Number(parkingFee),
@@ -536,6 +554,12 @@ rentAmount,
 
 depositFee,
 
+useType,
+
+vatTreatment,
+
+vatRate,
+
 garbageFee,
 
 parkingFee,
@@ -585,6 +609,12 @@ unit_number: unitNumber,
 rent_amount: Number(rentAmount),
 
 deposit_fee: Number(depositFee) || 0,
+
+use_type: useType || "residential",
+
+vat_treatment: vatTreatment || "A_EXEMPT",
+
+vat_rate: Number(vatRate) || 0,
 
 garbage_fee: garbageFee === null || garbageFee === undefined ? null : Number(garbageFee),
 
