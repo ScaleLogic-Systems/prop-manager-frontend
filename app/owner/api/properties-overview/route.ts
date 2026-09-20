@@ -406,6 +406,10 @@ parkingFee,
 
 waterFee,
 
+utilityName,
+
+utilityFee,
+
 } = body;
 
 
@@ -478,7 +482,7 @@ propertyId = newProp.id;
 
 
 
-const { error: unitErr } = await supabase.from("units").insert({
+const { data: savedUnit, error: unitErr } = await supabase.from("units").insert({
 
 property_id: propertyId,
 
@@ -502,7 +506,7 @@ water_fee: waterFee === null || waterFee === undefined ? null : Number(waterFee)
 
 is_occupied: false,
 
-});
+}).select("id").single();
 
 
 
@@ -510,6 +514,17 @@ if (unitErr) {
 
 return NextResponse.json({ error: unitErr.message }, { status: 500 });
 
+}
+
+if (utilityName && savedUnit) {
+	const utilityCode = String(utilityName).trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+	const { data: utilityType, error: utilityTypeError } = await supabase
+		.from('property_utility_types')
+		.upsert({ property_id: propertyId, name: String(utilityName).trim(), code: utilityCode, default_amount: Number(utilityFee) || 0, created_by: user.id }, { onConflict: 'property_id,code' })
+		.select('id').single();
+	if (utilityTypeError) return NextResponse.json({ error: utilityTypeError.message }, { status: 500 });
+	const { error: chargeError } = await supabase.from('unit_utility_charges').upsert({ unit_id: savedUnit.id, utility_type_id: utilityType.id, amount: Number(utilityFee) || 0 }, { onConflict: 'unit_id,utility_type_id' });
+	if (chargeError) return NextResponse.json({ error: chargeError.message }, { status: 500 });
 }
 
 

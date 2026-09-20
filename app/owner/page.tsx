@@ -10,7 +10,7 @@ import { UserManagementTab } from './tabs/UserManagementTab';
 import { TenantsTab } from './tabs/TenantsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import { SubscriptionsTab } from './tabs/SubscriptionsTab';
-import { MeterReadingTab } from '../caretaker/tabs/MeterReadingTab';
+import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
 import { createClient } from '@/lib/supabaseClient';
 
 export default function OwnerPage() {
@@ -65,8 +65,8 @@ export default function OwnerPage() {
     switch (activeTab) {
       case 'dashboard':
         return <DashboardTab />;
-      case 'meter-reading':
-        return <MeterReadingTab profileId={currentUserId} apiBasePath="/owner/api/unit-meter-readings" creatorRole="owner" />;
+      case 'generate-invoice':
+        return <InvoiceGenerationTab role="owner" />;
       case 'add-property':
         return <AddPropertyTab currentUserId={currentUserId} />;
       case 'users':

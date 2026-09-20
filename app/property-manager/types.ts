@@ -1,5 +1,6 @@
 export type ManagerTab = 
   | 'dashboard' 
+  | 'generate-invoice'
   | 'add-property' 
   | 'users' // NEW
   | 'tenants' 

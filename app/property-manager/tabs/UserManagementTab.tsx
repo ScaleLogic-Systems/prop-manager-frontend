@@ -68,7 +68,7 @@ export const UserManagementTab: React.FC = () => {
           phone,
           role,
           property_id: selectedPropertyId,
-          unit_number: role === 'tenant' ? selectedUnit : undefined,
+          unit_number: selectedUnit || null,
         }),
       });
 
@@ -207,16 +207,16 @@ export const UserManagementTab: React.FC = () => {
               </select>
             </div>
 
-            {role === 'tenant' && (
+            {(role === 'tenant' || role === 'caretaker') && (
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Assign Unit</label>
                 <select
-                  required={role === 'tenant'}
+                  required={false}
                   value={selectedUnit}
                   onChange={(e) => setSelectedUnit(e.target.value)}
                   className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                 >
-                  <option value="">-- Select Unit --</option>
+                  <option value="">N/A - Not assigned to a unit</option>
                   {currentProperty?.units?.map((unit) => (
                     <option key={unit} value={unit}>
                       {unit}

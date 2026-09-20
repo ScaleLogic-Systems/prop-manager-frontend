@@ -8,6 +8,10 @@ interface Unit {
   property_id: string;
   unit_number: string;
   rent_amount: number;
+  deposit_fee: number;
+  use_type: 'residential' | 'commercial' | 'mixed' | 'other';
+  vat_treatment: 'A_EXEMPT' | 'B_STANDARD_16' | 'C_ZERO_RATED' | 'E_NON_VAT';
+  vat_rate: number;
   garbage_fee: number;
   parking_fee: number;
   water_fee: number;
@@ -39,6 +43,12 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
 
   const [unitNumber, setUnitNumber] = useState("");
   const [rentAmount, setRentAmount] = useState<number | "">("");
+  const [depositFee, setDepositFee] = useState<number | "">("");
+  const [useType, setUseType] = useState<Unit['use_type']>('residential');
+  const [vatTreatment, setVatTreatment] = useState<Unit['vat_treatment']>('A_EXEMPT');
+  const [vatRate, setVatRate] = useState<number | "">(0);
+  const [utilityName, setUtilityName] = useState('');
+  const [utilityFee, setUtilityFee] = useState<number | "">("");
   const [garbageFee, setGarbageFee] = useState<number | "">(0);
   const [parkingFee, setParkingFee] = useState<number | "">(0);
   const [waterFee, setWaterFee] = useState<number | "">(0);
@@ -126,21 +136,54 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         propertyId = newProp.id;
       }
 
-      const { error: unitError } = await supabase.from("units").insert({
+      const { data: savedUnit, error: unitError } = await supabase.from("units").insert({
         property_id: propertyId,
         unit_number: unitNumber.trim(),
         rent_amount: Number(rentAmount) || 0,
+        deposit_fee: Number(depositFee) || 0,
+        use_type: useType,
+        vat_treatment: vatTreatment,
+        vat_rate: Number(vatRate) || 0,
         garbage_fee: Number(garbageFee) || 0,
         parking_fee: Number(parkingFee) || 0,
         water_fee: Number(waterFee) || 0,
         is_occupied: false,
-      });
+      }).select("id").single();
 
       if (unitError) throw unitError;
+
+      if (utilityName.trim() && savedUnit) {
+        const utilityCode = utilityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const { data: utilityType, error: utilityTypeError } = await supabase
+          .from('property_utility_types')
+          .upsert({
+            property_id: propertyId,
+            name: utilityName.trim(),
+            code: utilityCode,
+            default_amount: Number(utilityFee) || 0,
+            created_by: userId,
+          }, { onConflict: 'property_id,code' })
+          .select('id')
+          .single();
+        if (utilityTypeError) throw utilityTypeError;
+
+        const { error: chargeError } = await supabase.from('unit_utility_charges').upsert({
+          unit_id: savedUnit.id,
+          utility_type_id: utilityType.id,
+          amount: Number(utilityFee) || 0,
+        }, { onConflict: 'unit_id,utility_type_id' });
+        if (chargeError) throw chargeError;
+      }
 
       setFormSuccess(`Saved property and unit ${unitNumber}`);
       setUnitNumber("");
       setRentAmount("");
+      setDepositFee("");
+      setUseType('residential');
+      setVatTreatment('A_EXEMPT');
+      setVatRate(0);
+      setUtilityName('');
+      setUtilityFee('');
       setGarbageFee(0);
       setParkingFee(0);
       setWaterFee(0);
@@ -170,6 +213,16 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         .eq("id", editingProperty.id);
 
       if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('property_change_audit_logs').insert({
+          property_id: editingProperty.id,
+          actor_profile_id: user.id,
+          actor_name_snapshot: user.user_metadata?.full_name || user.email || user.id,
+          action: 'updated',
+          changed_fields: { name: editingProperty.name, location: editingProperty.location },
+        });
+      }
       setEditingProperty(null);
       fetchOverview();
     } catch (err: any) {
@@ -191,6 +244,10 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         .update({
           unit_number: editingUnit.unit_number.trim(),
           rent_amount: Number(editingUnit.rent_amount) || 0,
+          deposit_fee: Number(editingUnit.deposit_fee) || 0,
+          use_type: editingUnit.use_type,
+          vat_treatment: editingUnit.vat_treatment,
+          vat_rate: Number(editingUnit.vat_rate) || 0,
           garbage_fee: Number(editingUnit.garbage_fee) || 0,
           parking_fee: Number(editingUnit.parking_fee) || 0,
           water_fee: Number(editingUnit.water_fee) || 0,
@@ -199,6 +256,17 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         .eq("id", editingUnit.id);
 
       if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('property_change_audit_logs').insert({
+          unit_id: editingUnit.id,
+          property_id: editingUnit.property_id,
+          actor_profile_id: user.id,
+          actor_name_snapshot: user.user_metadata?.full_name || user.email || user.id,
+          action: 'updated',
+          changed_fields: { unit_number: editingUnit.unit_number, rent_amount: editingUnit.rent_amount, deposit_fee: editingUnit.deposit_fee, use_type: editingUnit.use_type, vat_treatment: editingUnit.vat_treatment },
+        });
+      }
       setEditingUnit(null);
       fetchOverview();
     } catch (err: any) {
@@ -284,6 +352,26 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium">Security Deposit (KES) *</label>
+              <input type="number" min="0" required className="w-full border rounded p-2 mt-1" value={depositFee} onChange={(e) => setDepositFee(e.target.value ? Number(e.target.value) : "")} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Unit Use *</label>
+              <select required className="w-full border rounded p-2 mt-1 bg-white" value={useType} onChange={(e) => setUseType(e.target.value as Unit['use_type'])}>
+                <option value="residential">Residential</option><option value="commercial">Commercial</option><option value="mixed">Mixed</option><option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium">VAT Treatment *</label>
+              <select required className="w-full border rounded p-2 mt-1 bg-white" value={vatTreatment} onChange={(e) => setVatTreatment(e.target.value as Unit['vat_treatment'])}>
+                <option value="A_EXEMPT">Exempt</option><option value="B_STANDARD_16">Standard 16%</option><option value="C_ZERO_RATED">Zero-rated</option><option value="E_NON_VAT">Non-VAT</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium">VAT Rate (decimal)</label>
+              <input type="number" min="0" max="1" step="0.01" className="w-full border rounded p-2 mt-1" value={vatRate} onChange={(e) => setVatRate(e.target.value ? Number(e.target.value) : 0)} />
+            </div>
+            <div>
               <label className="block text-sm font-medium">Garbage Fee</label>
               <input
                 type="number"
@@ -309,6 +397,14 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                 value={waterFee}
                 onChange={(e) => setWaterFee(e.target.value ? Number(e.target.value) : 0)}
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Custom Utility Name</label>
+              <input type="text" className="w-full border rounded p-2 mt-1" placeholder="e.g. Security" value={utilityName} onChange={(e) => setUtilityName(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium">Custom Utility Fee (KES)</label>
+              <input type="number" min="0" className="w-full border rounded p-2 mt-1" placeholder="0" value={utilityFee} onChange={(e) => setUtilityFee(e.target.value ? Number(e.target.value) : "")} />
             </div>
           </div>
         </div>
@@ -530,6 +626,22 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                       setEditingUnit({ ...editingUnit, rent_amount: Number(e.target.value) })
                     }
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Security Deposit (KES)</label>
+                  <input type="number" min="0" className="w-full border rounded p-2 mt-1" value={editingUnit.deposit_fee} onChange={(e) => setEditingUnit({ ...editingUnit, deposit_fee: Number(e.target.value) })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">Unit Use</label>
+                  <select className="w-full border rounded p-2 mt-1 bg-white" value={editingUnit.use_type} onChange={(e) => setEditingUnit({ ...editingUnit, use_type: e.target.value as Unit['use_type'] })}>
+                    <option value="residential">Residential</option><option value="commercial">Commercial</option><option value="mixed">Mixed</option><option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium">VAT Treatment</label>
+                  <select className="w-full border rounded p-2 mt-1 bg-white" value={editingUnit.vat_treatment} onChange={(e) => setEditingUnit({ ...editingUnit, vat_treatment: e.target.value as Unit['vat_treatment'] })}>
+                    <option value="A_EXEMPT">Exempt</option><option value="B_STANDARD_16">Standard 16%</option><option value="C_ZERO_RATED">Zero-rated</option><option value="E_NON_VAT">Non-VAT</option>
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium">Garbage Fee (KES)</label>

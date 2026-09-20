@@ -2,6 +2,7 @@
 
 export type OwnerTab =
   | 'dashboard'
+  | 'generate-invoice'
   | 'meter-reading'
   | 'add-property'
   | 'users'

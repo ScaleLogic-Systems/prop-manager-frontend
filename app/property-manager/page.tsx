@@ -12,7 +12,8 @@ import {
   Building2,
   ShieldCheck,
   Loader2,
-  LogOut
+  LogOut,
+  FileText
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabaseClient';
@@ -24,9 +25,9 @@ import { UserManagementTab } from './tabs/UserManagementTab';
 import { TenantsTab } from './tabs/TenantsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import { SubscriptionsTab } from './tabs/SubscriptionsTab';
-import { GenerateInvoiceModal } from '@/components/GenerateInvoiceModal';
+import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
 
-export type ManagerTab = 'dashboard' | 'add-property' | 'users' | 'tenants' | 'unassigned-payments' | 'subscription';
+export type ManagerTab = 'dashboard' | 'generate-invoice' | 'add-property' | 'users' | 'tenants' | 'unassigned-payments' | 'subscription';
 
 export default function PropertyManagerPage() {
   const router = useRouter();
@@ -35,7 +36,6 @@ export default function PropertyManagerPage() {
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [loadingUser, setLoadingUser] = useState<boolean>(true);
   const [loggingOut, setLoggingOut] = useState<boolean>(false);
-  const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -102,6 +102,7 @@ export default function PropertyManagerPage() {
 
   const navItems: { id: ManagerTab; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
+    { id: 'generate-invoice', label: 'Generate Invoice', icon: <FileText size={18} /> },
     { id: 'add-property', label: 'Add Property', icon: <PlusCircle size={18} /> },
     { id: 'users', label: 'User Management', icon: <UserPlus size={18} /> },
     { id: 'tenants', label: 'Tenants & Payments', icon: <Users size={18} /> },
@@ -206,13 +207,6 @@ export default function PropertyManagerPage() {
               </h1>
             </div>
 
-            <button
-              onClick={() => setIsInvoiceModalOpen(true)}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition shadow-lg shadow-blue-600/20 shrink-0 self-start md:self-auto"
-            >
-              <Receipt size={16} />
-              <span>Generate Invoice</span>
-            </button>
           </div>
         </header>
 
@@ -220,6 +214,7 @@ export default function PropertyManagerPage() {
         <main className="flex-1 overflow-y-auto p-8 bg-slate-50/60">
           <div className="max-w-7xl mx-auto">
             {activeTab === 'dashboard' && <DashboardTab />}
+            {activeTab === 'generate-invoice' && <InvoiceGenerationTab role="property_manager" />}
             {activeTab === 'add-property' && <AddPropertyTab />}
             {activeTab === 'users' && <UserManagementTab />}
             {activeTab === 'tenants' && <TenantsTab />}
@@ -229,13 +224,6 @@ export default function PropertyManagerPage() {
         </main>
       </div>
 
-      {/* Invoice Generation Modal */}
-      <GenerateInvoiceModal
-        isOpen={isInvoiceModalOpen}
-        onClose={() => setIsInvoiceModalOpen(false)}
-        creatorRole="property_manager"
-        profileId={currentUserId}
-      />
     </div>
   );
 }

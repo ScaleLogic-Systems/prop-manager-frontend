@@ -9,11 +9,13 @@ import {
   History, 
   Wrench,
   DollarSign,
-  LogOut
+  LogOut,
+  FileText
 } from 'lucide-react';
 
 import { DashboardTab } from './tabs/DashboardTab';
 import { MeterReadingTab } from './tabs/MeterReadingTab';
+import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
 import { AddTenantTab } from './tabs/AddTenantTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
@@ -21,6 +23,7 @@ import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 export type CaretakerTab = 
   | 'dashboard' 
   | 'meter' 
+  | 'generate-invoice'
   | 'add-tenant' 
   | 'payments' 
   | 'unassigned-payments' 
@@ -105,6 +108,18 @@ export default function CaretakerPortalPage() {
             >
               <Gauge size={18} />
               Meter Readings
+            </button>
+
+            <button
+              onClick={() => setActiveTab('generate-invoice')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
+                activeTab === 'generate-invoice'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <FileText size={18} />
+              Generate Invoice
             </button>
 
             <button
@@ -196,6 +211,7 @@ export default function CaretakerPortalPage() {
             profileId={profile?.id}
           />
         )}
+        {activeTab === 'generate-invoice' && <InvoiceGenerationTab role="caretaker" />}
         {activeTab === 'add-tenant' && (
           <AddTenantTab propertyId={profile?.assigned_property_id} />
         )}

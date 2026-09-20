@@ -50,6 +50,8 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
 
   const [waterFee, setWaterFee] = useState<number | "">(0);
   const [isWaterNA, setIsWaterNA] = useState(false);
+  const [utilityName, setUtilityName] = useState('');
+  const [utilityFee, setUtilityFee] = useState<number | "">('');
 
   // Status states
   const [submitting, setSubmitting] = useState(false);
@@ -137,6 +139,8 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         garbageFee: isGarbageNA ? null : Number(garbageFee) || 0,
         parkingFee: isParkingNA ? null : Number(parkingFee) || 0,
         waterFee: isWaterNA ? null : Number(waterFee) || 0,
+        utilityName: utilityName.trim(),
+        utilityFee: Number(utilityFee) || 0,
       };
 
       const supabase = createClient();
@@ -175,6 +179,8 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
       setIsParkingNA(false);
       setWaterFee(0);
       setIsWaterNA(false);
+      setUtilityName('');
+      setUtilityFee('');
 
       fetchProperties();
     } catch (err: any) {
@@ -245,6 +251,18 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(errData.error || "Failed to update unit record.");
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from('property_change_audit_logs').insert({
+          unit_id: editingUnit.id,
+          property_id: editingUnit.property_id,
+          actor_profile_id: user.id,
+          actor_name_snapshot: user.user_metadata?.full_name || user.email || user.id,
+          action: 'updated',
+          changed_fields: payload,
+        });
       }
 
       setEditingUnit(null);
@@ -401,6 +419,15 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                 value={isGarbageNA ? "" : garbageFee}
                 onChange={(e) => setGarbageFee(e.target.value ? Number(e.target.value) : 0)}
               />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Custom Utility Name</label>
+              <input type="text" className="w-full border rounded p-2 mt-1" placeholder="e.g. Security" value={utilityName} onChange={(e) => setUtilityName(e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Custom Utility Fee (KES)</label>
+              <input type="number" min="0" className="w-full border rounded p-2 mt-1" placeholder="0" value={utilityFee} onChange={(e) => setUtilityFee(e.target.value ? Number(e.target.value) : '')} />
             </div>
 
             {/* Parking Fee */}
