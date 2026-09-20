@@ -1,4 +1,3 @@
-// app/super-admin/tabs/GenerateInvoiceTab.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -92,7 +91,7 @@ export const GenerateInvoiceTab: React.FC = () => {
         const formatted: SubscriberInvoiceData[] = users.map((user) => {
           const userProps = properties?.filter((p) => p.user_id === user.id) || [];
           const userPropIds = userProps.map((p) => p.id);
-          
+
           const occupiedCount =
             occupiedUnitsData?.filter((u) => userPropIds.includes(u.property_id)).length || 0;
 
@@ -114,18 +113,14 @@ export const GenerateInvoiceTab: React.FC = () => {
         }
       } catch (err) {
         console.error('Error fetching subscriber occupied units:', err);
+        if (!ignore) setLoading(false);
       } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
+        if (!ignore) setLoading(false);
       }
     }
 
     fetchSubscribersWithOccupiedUnits();
-
-    return () => {
-      ignore = true;
-    };
+    return () => { ignore = true; };
   }, []);
 
   const selectedSubscriber = subscribers.find((s) => s.id === selectedSubscriberId);

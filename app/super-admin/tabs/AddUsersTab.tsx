@@ -1,17 +1,20 @@
+// app/super-admin/tabs/AddUsersTab.tsx
 'use client';
 
 import React, { useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
 import { UserPlus, CheckCircle2, AlertCircle, Mail, User, ShieldCheck } from 'lucide-react';
 
 const availableRoles = [
-  { value: 'developer',        label: 'Developer — Technical & System Controls', badge: 'Tech' },
-  { value: 'accountant',       label: 'Accountant — Financials & Reconciliation', badge: 'Finance' },
-  { value: 'super-admin',      label: 'Super Admin — Full Platform Control', badge: 'Admin' },
+  { value: 'developer', label: 'Developer (Technical & System Controls)', badge: 'Tech' },
+  { value: 'accountant', label: 'Accountant (Financials & Reconciliation)', badge: 'Finance' },
+  { value: 'super-admin', label: 'Super Admin (Full Platform Control)', badge: 'Admin' },
   { value: 'property_manager', label: 'Property Manager', badge: 'Management' },
-  { value: 'owner',            label: 'Property Owner', badge: 'Client' },
-  { value: 'caretaker',        label: 'Caretaker', badge: 'Staff' },
-  { value: 'tenant',           label: 'Tenant', badge: 'Client' },
-  { value: 'marketer',         label: 'Marketer', badge: 'Sales' },
+  { value: 'admin', label: 'Admin', badge: 'Admin' },
+  { value: 'owner', label: 'Property Owner', badge: 'Client' },
+  { value: 'caretaker', label: 'Caretaker', badge: 'Staff' },
+  { value: 'tenant', label: 'Tenant', badge: 'Client' },
+  { value: 'marketer', label: 'Marketer', badge: 'Sales' },
 ];
 
 export const AddUsersTab: React.FC = () => {
@@ -27,6 +30,19 @@ export const AddUsersTab: React.FC = () => {
     setMessage(null);
 
     try {
+      // 1. Insert profile record directly
+      const { error } = await supabase.from('profiles').insert([
+        {
+          email,
+          full_name: fullName,
+          role,
+          created_at: new Date().toISOString(),
+        },
+      ]);
+
+      if (error) throw error;
+
+      // 2. Call admin API route to provision Auth and send temporary password email
       const res = await fetch('/api/admin/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,7 +60,7 @@ export const AddUsersTab: React.FC = () => {
       setFullName('');
       setRole('developer');
     } catch (err: unknown) {
-      const errorMsg = err instanceof Error ? err.message : 'Failed to send invitation.';
+      const errorMsg = err instanceof Error ? err.message : 'Failed to onboard user.';
       setMessage({ type: 'error', text: errorMsg });
     } finally {
       setLoading(false);
@@ -155,8 +171,8 @@ export const AddUsersTab: React.FC = () => {
               disabled={loading}
               className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3.5 px-4 rounded-xl transition shadow-lg shadow-indigo-600/25 active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-2"
             >
+              <span>{loading ? 'Sending Invitation…' : 'Send Invitation & Create Profile'}</span>
               <UserPlus size={16} />
-              {loading ? 'Sending Invitation…' : 'Send Invitation'}
             </button>
           </div>
         </form>
