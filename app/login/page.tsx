@@ -123,9 +123,14 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-300">
+                Password
+              </label>
+              <Link href="/auth/forgot-password" className="text-xs text-indigo-400 hover:underline font-medium">
+                Forgot password?
+              </Link>
+            </div>
             <input
               type="password"
               required
@@ -144,15 +149,6 @@ export default function LoginPage() {
             {loading ? "Signing In..." : "Sign In"}
           </button>
         </form>
-
-        <div className="text-center mt-6">
-          <p className="text-xs text-slate-400">
-            Don&apos;t have an account?{" "}
-            <Link href="/signup" className="text-indigo-400 hover:underline font-medium">
-              Register here
-            </Link>
-          </p>
-        </div>
       </div>
     </div>
   );
