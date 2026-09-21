@@ -10,6 +10,7 @@ import { ApiLogsTab } from './tabs/ApiLogsTab';
 import { RbacTab } from './tabs/RbacTab';
 import { AuditLogsTab } from './tabs/AuditLogsTab';
 import { FeatureFlagsTab } from './tabs/FeatureFlagsTab';
+import DeveloperSettingsTab from './tabs/SettingsTab'; // Import from local tabs folder
 
 export default function DeveloperPage() {
   const [activeTab, setActiveTab] = useState<DeveloperTab>('system-health');
@@ -26,6 +27,8 @@ export default function DeveloperPage() {
         return <AuditLogsTab />;
       case 'feature-flags':
         return <FeatureFlagsTab />;
+      case 'settings':
+        return <DeveloperSettingsTab />;
       default:
         return <SystemHealthTab />;
     }

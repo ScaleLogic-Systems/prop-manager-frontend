@@ -5,7 +5,8 @@ export type AccountantTab =
   | 'rent-roll' 
   | 'invoices' 
   | 'reconciliation' 
-  | 'payouts';
+  | 'payouts'
+  | 'settings';
 
 export type PaymentStatus = 'paid' | 'pending' | 'overdue' | 'partial';
 export type PaymentMethod = 'mpesa' | 'bank_transfer' | 'cash' | 'cheque';

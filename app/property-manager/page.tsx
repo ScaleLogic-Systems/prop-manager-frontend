@@ -13,7 +13,9 @@ import {
   ShieldCheck,
   Loader2,
   LogOut,
-  FileText
+  FileText,
+  HelpCircle,
+  Settings
 } from 'lucide-react';
 
 import { supabase } from '@/lib/supabaseClient';
@@ -26,8 +28,19 @@ import { TenantsTab } from './tabs/TenantsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import { SubscriptionsTab } from './tabs/SubscriptionsTab';
 import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
+import { ContactSupportTab } from '@/components/support/ContactSupportTab';
+import PropertyManagerSettingsTab from './tabs/SettingsTab';
 
-export type ManagerTab = 'dashboard' | 'generate-invoice' | 'add-property' | 'users' | 'tenants' | 'unassigned-payments' | 'subscription';
+export type ManagerTab = 
+  | 'dashboard' 
+  | 'generate-invoice' 
+  | 'add-property' 
+  | 'users' 
+  | 'tenants' 
+  | 'unassigned-payments' 
+  | 'subscription' 
+  | 'support'
+  | 'settings';
 
 export default function PropertyManagerPage() {
   const router = useRouter();
@@ -108,6 +121,8 @@ export default function PropertyManagerPage() {
     { id: 'tenants', label: 'Tenants & Payments', icon: <Users size={18} /> },
     { id: 'unassigned-payments', label: 'Unassigned Payments', icon: <Receipt size={18} /> },
     { id: 'subscription', label: 'Subscriptions', icon: <CreditCard size={18} /> },
+    { id: 'support', label: 'Help & Support', icon: <HelpCircle size={18} /> },
+    { id: 'settings', label: 'Account Settings', icon: <Settings size={18} /> },
   ];
 
   return (
@@ -206,7 +221,6 @@ export default function PropertyManagerPage() {
                 </span> 👋
               </h1>
             </div>
-
           </div>
         </header>
 
@@ -220,10 +234,11 @@ export default function PropertyManagerPage() {
             {activeTab === 'tenants' && <TenantsTab />}
             {activeTab === 'unassigned-payments' && <UnassignedPaymentsTab />}
             {activeTab === 'subscription' && <SubscriptionsTab />}
+            {activeTab === 'support' && <ContactSupportTab roleTitle="Property Manager" />}
+            {activeTab === 'settings' && <PropertyManagerSettingsTab />}
           </div>
         </main>
       </div>
-
     </div>
   );
 }

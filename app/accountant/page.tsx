@@ -10,6 +10,7 @@ import { RentRollTab } from './tabs/RentRollTab';
 import { InvoicesTab } from './tabs/InvoicesTab';
 import { ReconciliationTab } from './tabs/ReconciliationTab';
 import { PayoutsTab } from './tabs/PayoutsTab';
+import AccountantSettingsTab from './tabs/SettingsTab';
 
 export default function AccountantPage() {
   const [activeTab, setActiveTab] = useState<AccountantTab>('rent-roll');
@@ -26,6 +27,8 @@ export default function AccountantPage() {
         return <ReconciliationTab />;
       case 'payouts':
         return <PayoutsTab />;
+      case 'settings':
+        return <AccountantSettingsTab />;
       default:
         return <RentRollTab />;
     }

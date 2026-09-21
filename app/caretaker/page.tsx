@@ -10,7 +10,9 @@ import {
   Wrench,
   DollarSign,
   LogOut,
-  FileText
+  FileText,
+  HelpCircle,
+  Settings
 } from 'lucide-react';
 
 import { DashboardTab } from './tabs/DashboardTab';
@@ -19,6 +21,8 @@ import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
 import { AddTenantTab } from './tabs/AddTenantTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
+import CaretakerSupportTab from './tabs/SupportTab';
+import CaretakerSettingsTab from './tabs/SettingsTab';
 
 export type CaretakerTab = 
   | 'dashboard' 
@@ -28,6 +32,7 @@ export type CaretakerTab =
   | 'payments' 
   | 'unassigned-payments' 
   | 'requests' 
+  | 'support'
   | 'settings';
 
 interface CaretakerProfile {
@@ -157,6 +162,30 @@ export default function CaretakerPortalPage() {
               <DollarSign size={18} />
               Unassigned Payments
             </button>
+
+            <button
+              onClick={() => setActiveTab('support')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
+                activeTab === 'support'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <HelpCircle size={18} />
+              Help & Support
+            </button>
+
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
+                activeTab === 'settings'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <Settings size={18} />
+              Account Settings
+            </button>
           </nav>
         </div>
 
@@ -195,7 +224,6 @@ export default function CaretakerPortalPage() {
               </span>
             </p>
           </div>
-
         </div>
 
         {/* Tab Views */}
@@ -221,8 +249,9 @@ export default function CaretakerPortalPage() {
         {activeTab === 'unassigned-payments' && (
           <UnassignedPaymentsTab propertyId={profile?.assigned_property_id} />
         )}
+        {activeTab === 'support' && <CaretakerSupportTab />}
+        {activeTab === 'settings' && <CaretakerSettingsTab />}
       </main>
-
     </div>
   );
 }

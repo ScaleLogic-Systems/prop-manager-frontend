@@ -1,4 +1,3 @@
-// app/marketer/page.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -9,6 +8,7 @@ import { DashboardTab } from './tabs/DashboardTab';
 import { AddClientsTab } from './tabs/AddClientsTab';
 import { AddPropertyTab } from './tabs/AddPropertyTab';
 import { AddUserTab } from './tabs/AddUserTab';
+import { AccountSettingsTab } from '@/components/settings/AccountSettingsTab';
 import { createClient } from '@/lib/supabaseClient';
 
 export default function MarketerPage() {
@@ -79,6 +79,8 @@ export default function MarketerPage() {
             fullName={marketerFullName}
           />
         );
+      case 'settings':
+        return <AccountSettingsTab roleTitle="Marketer" />;
       default:
         return <DashboardTab fullName={marketerFullName} />;
     }

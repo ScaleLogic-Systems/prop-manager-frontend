@@ -11,6 +11,8 @@ import { TenantsTab } from './tabs/TenantsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import { SubscriptionsTab } from './tabs/SubscriptionsTab';
 import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
+import { ContactSupportTab } from '@/components/support/ContactSupportTab';
+import OwnerSettingsTab from './tabs/SettingsTab';
 import { createClient } from '@/lib/supabaseClient';
 
 export default function OwnerPage() {
@@ -77,6 +79,10 @@ export default function OwnerPage() {
         return <UnassignedPaymentsTab />;
       case 'subscription':
         return <SubscriptionsTab />;
+      case 'support':
+        return <ContactSupportTab roleTitle="Property Owner" />;
+      case 'settings':
+        return <OwnerSettingsTab />;
       default:
         return <DashboardTab />;
     }
@@ -101,7 +107,6 @@ export default function OwnerPage() {
           {renderTabContent()}
         </div>
       </main>
-
     </div>
   );
 }

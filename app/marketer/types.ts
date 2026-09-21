@@ -1,6 +1,6 @@
 // app/marketer/types.ts
 
-export type MarketerTab = 'dashboard' | 'add-clients' | 'add-properties' | 'add-user';
+export type MarketerTab = 'dashboard' | 'add-clients' | 'add-properties' | 'add-user' | 'settings';
 
 export type ClientRole = 'property_owner' | 'property_manager';
 

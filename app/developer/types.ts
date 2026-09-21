@@ -5,7 +5,8 @@ export type DeveloperTab =
   | 'api-logs' 
   | 'rbac' 
   | 'audit-logs' 
-  | 'feature-flags';
+  | 'feature-flags'
+  | 'settings';
 
 export interface ServiceHealth {
   id: string;

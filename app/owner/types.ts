@@ -8,7 +8,9 @@ export type OwnerTab =
   | 'users'
   | 'tenants'
   | 'unassigned-payments'
-  | 'subscription';
+  | 'subscription'
+  | 'support'
+  | 'settings';
 
 export type UserRole = 'tenant' | 'caretaker' | 'owner' | 'property_manager';
 

@@ -21,6 +21,7 @@ import { WebhookDebuggerTab } from './tabs/WebhookDebuggerTab';
 import { ImpersonatorTab } from './tabs/ImpersonatorTab';
 import { AuditLogsTab } from './tabs/AuditLogsTab';
 import { FeatureFlagsTab } from './tabs/FeatureFlagsTab';
+import SuperAdminSettingsTab from './tabs/SettingsTab';
 
 export default function SuperAdminDashboard() {
   const [activeTab, setActiveTab] = useState<SuperadminTab>('dashboard');
@@ -59,6 +60,7 @@ export default function SuperAdminDashboard() {
           {(activeTab === 'tenant-impersonation' || activeTab === 'impersonator') && <ImpersonatorTab />}
           {activeTab === 'audit-logs' && <AuditLogsTab />}
           {activeTab === 'feature-flags' && <FeatureFlagsTab />}
+          {activeTab === 'settings' && <SuperAdminSettingsTab />}
         </div>
       </main>
     </div>
