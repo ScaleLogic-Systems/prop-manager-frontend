@@ -27,7 +27,8 @@ export type SuperadminTab =
   | 'tenant-impersonation'
   // Governance & Feature Control
   | 'audit-logs'
-  | 'feature-flags';
+  | 'feature-flags'
+  | 'settings';
 
 export type SuperAdminTab = SuperadminTab;
 
