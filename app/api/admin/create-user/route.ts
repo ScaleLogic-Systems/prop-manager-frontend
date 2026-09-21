@@ -1,136 +1,132 @@
-// app/api/admin/create-user/route.ts
-import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
+import { Resend } from 'resend';
 
-// Build a service-role admin client — never expose this key to the browser.
+// Initialize Resend with environment variable
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// Initialize Supabase Admin client using service role key for user creation and metadata management
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  }
 );
 
-function generateTempPassword(length = 16): string {
-  const chars =
-    'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
-  let result = '';
-  // Use Math.random only as a fallback — crypto is available in Node 18+
-  const arr = new Uint8Array(length);
-  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
-    crypto.getRandomValues(arr);
-  } else {
-    for (let i = 0; i < length; i++) arr[i] = Math.floor(Math.random() * 256);
-  }
+// Helper function to generate a secure random temporary password
+function generateTemporaryPassword(length = 12): string {
+  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+  let password = '';
+  const array = new Uint32Array(length);
+  crypto.getRandomValues(array);
   for (let i = 0; i < length; i++) {
-    result += chars[arr[i] % chars.length];
+    password += charset[array[i] % charset.length];
   }
-  return result;
+  return password;
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const { email, fullName, role } = (await req.json()) as {
-      email: string;
-      fullName: string;
-      role: string;
-    };
+    const body = await request.json();
+    const { email, fullName, role } = body;
 
-    if (!email || !role) {
-      return NextResponse.json({ error: 'email and role are required' }, { status: 400 });
+    if (!email || !fullName || !role) {
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields: email, fullName, or role.' },
+        { status: 400 }
+      );
     }
 
-    const tempPassword = generateTempPassword();
+    // 1. Normalize role if needed (e.g., property_owner -> owner)
+    const normalizedRole = role === 'property_owner' ? 'owner' : role;
 
-    // 1. Create auth user with Admin API — email confirmed immediately, no verification email
-    const { data: authUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    // 2. Generate a secure temporary password
+    const tempPassword = generateTemporaryPassword();
+
+    // 3. Create Supabase Auth user via Admin API
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password: tempPassword,
-      email_confirm: true,
+      email_confirm: true, // Confirm email immediately so they don't get stuck in verification loops
       user_metadata: {
-        full_name: fullName || '',
-        role,
-        must_change_password: true,
+        full_name: fullName,
+        role: normalizedRole,
+        must_change_password: true, // Flag to force password reset on first login
       },
     });
 
-    if (createError) {
-      return NextResponse.json({ error: createError.message }, { status: 400 });
+    if (authError) {
+      throw new Error(authError.message);
     }
 
-    const userId = authUser.user.id;
+    const userId = authData.user.id;
 
-    // 2. Upsert profile row so the role is immediately readable via RLS policies
-    const { error: profileError } = await supabaseAdmin.from('profiles').upsert(
-      {
+    // 4. Upsert or update the profile record in the public.profiles table
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
         id: userId,
         email,
-        full_name: fullName || '',
-        role,
-      },
-      { onConflict: 'id' }
-    );
+        full_name: fullName,
+        role: normalizedRole,
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' });
 
     if (profileError) {
-      // Roll back auth user so we don't leave orphan accounts
+      // Rollback auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(userId);
-      return NextResponse.json({ error: profileError.message }, { status: 500 });
+      throw new Error(`Failed to create user profile: ${profileError.message}`);
     }
 
-    // 3. Send invitation email via Resend
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    const setPasswordUrl = `${appUrl}/set-password`;
+    // 5. Dispatch email via Resend containing temporary credentials and reset link
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://propmanager.co.ke';
+    const changePasswordUrl = `${appUrl}/auth/change-password`;
 
-    const resendApiKey = process.env.RESEND_API_KEY;
-    if (resendApiKey) {
-      try {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${resendApiKey}`,
-          },
-          body: JSON.stringify({
-            from: process.env.RESEND_FROM_EMAIL || 'no-reply@propmanager.app',
-            to: [email],
-            subject: 'Welcome to PropManager — Set Your Password',
-            html: `
-              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
-                <h2 style="color:#1e293b">You have been invited to PropManager</h2>
-                <p>Hi ${fullName || 'there'},</p>
-                <p>Your account has been created with the role: <strong>${role}</strong>.</p>
-                <p>
-                  Please click the button below to set your permanent password and access your dashboard.
-                  For reference, your temporary password is:
-                </p>
-                <div style="background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:12px 20px;font-family:monospace;font-size:16px;letter-spacing:2px;margin:16px 0">
-                  ${tempPassword}
-                </div>
-                <a
-                  href="${setPasswordUrl}"
-                  style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;margin-top:8px"
-                >
-                  Set Your Password
-                </a>
-                <p style="margin-top:24px;font-size:12px;color:#64748b">
-                  If you did not expect this email, please ignore it.
-                </p>
-              </div>
-            `,
-          }),
-        });
-      } catch (emailErr) {
-        // Non-fatal — user is created; log the failure but don't break the response
-        console.error('Invitation email failed:', emailErr);
-      }
+    const emailResponse = await Resend && process.env.RESEND_FROM_EMAIL ? await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL,
+      to: email,
+      subject: 'Your PropManager HQ Account & Temporary Password',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f172a; color: #f8fafc; border-radius: 12px;">
+          <h2 style="color: #fbbf24; margin-top: 0;">Welcome to PropManager HQ, ${fullName}!</h2>
+          <p>An administrative account has been created for you with the role: <strong style="text-transform: uppercase; color: #38bdf8;">${normalizedRole}</strong>.</p>
+          
+          <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #334155;">
+            <p style="margin: 0 0 10px 0; font-size: 14px;"><strong>Temporary Password:</strong></p>
+            <code style="background: #0f172a; padding: 8px 12px; display: inline-block; border-radius: 6px; color: #34d399; font-size: 16px; font-family: monospace;">${tempPassword}</code>
+          </div>
+
+          <p>For security reasons, you will be required to set a permanent password upon your first sign-in.</p>
+          
+          <div style="margin-top: 30px;">
+            <a href="${changePasswordUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Sign In & Set Password</a>
+          </div>
+
+          <p style="margin-top: 30px; font-size: 12px; color: #94a3b8;">If you did not request this account, please contact your system administrator immediately.</p>
+        </div>
+      `,
+    }) : null;
+
+    if (emailResponse && emailResponse.error) {
+      console.error('Resend email error:', emailResponse.error);
     }
 
     return NextResponse.json({
       success: true,
-      userId,
-      message: `User created and invitation sent to ${email}.`,
+      message: `User successfully invited! Temporary password and portal link dispatched to ${email}.`,
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal server error';
-    return NextResponse.json({ error: message }, { status: 500 });
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred during user creation.';
+    console.error('Error in /api/admin/create-user:', errorMessage);
+    return NextResponse.json(
+      { success: false, error: errorMessage },
+      { status: 500 }
+    );
   }
 }
-
