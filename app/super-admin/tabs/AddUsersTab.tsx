@@ -2,7 +2,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
 import { UserPlus, CheckCircle2, AlertCircle, Mail, User, ShieldCheck } from 'lucide-react';
 
 const availableRoles = [
@@ -30,19 +29,7 @@ export const AddUsersTab: React.FC = () => {
     setMessage(null);
 
     try {
-      // 1. Insert profile record directly
-      const { error } = await supabase.from('profiles').insert([
-        {
-          email,
-          full_name: fullName,
-          role,
-          created_at: new Date().toISOString(),
-        },
-      ]);
-
-      if (error) throw error;
-
-      // 2. Call admin API route to provision Auth and send temporary password email
+      // Call admin API route to provision Auth, sync profile, and send temporary password email securely
       const res = await fetch('/api/admin/create-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -52,7 +39,7 @@ export const AddUsersTab: React.FC = () => {
       const json = (await res.json()) as { success?: boolean; message?: string; error?: string };
 
       if (!res.ok || !json.success) {
-        throw new Error(json.error || 'Failed to send invitation.');
+        throw new Error(json.error || 'Failed to onboard user.');
       }
 
       setMessage({ type: 'success', text: json.message || `Invitation sent to ${email}.` });
