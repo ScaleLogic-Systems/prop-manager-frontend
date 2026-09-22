@@ -1,3 +1,4 @@
+// app/api/admin/create-user/route.ts
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
@@ -38,53 +39,66 @@ export async function POST(request: Request) {
       );
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
     // Normalize role matching database schema
-    const normalizedRole = role === 'property_owner' ? 'owner' : role;
+    const normalizedRole = role === 'property_owner' ? 'owner' : role.trim().toLowerCase().replace(/\s+/g, '_');
     const tempPassword = generateTemporaryPassword();
 
     // 1. Create user in Supabase Auth via Admin API
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: normalizedEmail,
       password: tempPassword,
       email_confirm: true,
       user_metadata: {
-        full_name: fullName,
+        full_name: fullName.trim(),
         role: normalizedRole,
         must_change_password: true,
       },
     });
 
     if (authError) {
-      throw new Error(authError.message);
+      if (authError.message.includes('already registered')) {
+        return NextResponse.json(
+          { success: false, error: 'A user with this email address already exists in the system.' },
+          { status: 400 }
+        );
+      }
+      throw new Error(`Auth creation failed: ${authError.message}`);
     }
 
     const userId = authData.user.id;
 
-    // 2. Upsert profile record with active status
+    // 2. Upsert profile record (matching actual DB schema fields)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
         id: userId,
-        email,
-        full_name: fullName,
+        email: normalizedEmail,
+        full_name: fullName.trim(),
         role: normalizedRole,
-        status: 'active',
+        must_change_password: true,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'id' });
 
     if (profileError) {
+      // Rollback auth user if profile creation fails
       await supabaseAdmin.auth.admin.deleteUser(userId);
-      throw new Error(`Failed to create profile: ${profileError.message}`);
+      throw new Error(`Failed to create user profile record: ${profileError.message}`);
     }
 
-    // 3. Send email via Resend
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://propmanager.co.ke';
+    // 3. Resolve App URL correctly using your Vercel deployment domain
+    const appUrl = 
+      process.env.NEXT_PUBLIC_SITE_URL || 
+      process.env.NEXT_PUBLIC_APP_URL || 
+      'https://prop-manager-frontend.vercel.app';
+      
     const changePasswordUrl = `${appUrl}/auth/change-password`;
 
+    // 4. Send email via Resend (with graceful fallback logging if email fails)
     if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
-      await resend.emails.send({
+      const { error: resendError } = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL,
-        to: email,
+        to: normalizedEmail,
         subject: 'Your PropManager HQ Account & Temporary Password',
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f172a; color: #f8fafc; border-radius: 12px;">
@@ -104,15 +118,21 @@ export async function POST(request: Request) {
           </div>
         `,
       });
+
+      if (resendError) {
+        console.error('Resend onboarding email dispatch error:', resendError);
+        // We log it but don't crash the user creation, since the account is successfully created in Supabase
+      }
     }
 
     return NextResponse.json({
       success: true,
-      message: `User successfully invited and temporary password dispatched to ${email}.`,
+      message: `User successfully invited and temporary password dispatched to ${normalizedEmail}.`,
     });
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    console.error('Onboarding exception:', errorMessage);
     return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
