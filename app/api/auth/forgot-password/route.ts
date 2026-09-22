@@ -43,14 +43,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Generate Supabase recovery action link pointing correctly to /set-password
+    // 2. Generate Supabase recovery action link
     const appUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://prop-manager-frontend.vercel.app';
     
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: normalizedEmail,
       options: {
-        redirectTo: `${appUrl}/set-password`, // 👈 Fixed redirect route
+        redirectTo: `${appUrl}/set-password`,
       },
     });
 
@@ -60,26 +60,33 @@ export async function POST(request: Request) {
 
     const recoveryUrl = linkData.properties?.action_link;
 
-    // 3. Dispatch email via Resend
-    if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
-      await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL,
-        to: normalizedEmail,
-        subject: 'Reset Your PropManager HQ Password',
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f172a; color: #f8fafc; border-radius: 12px;">
-            <h2 style="color: #fbbf24; margin-top: 0;">Password Reset Request</h2>
-            <p>Hello ${profile.full_name || 'User'},</p>
-            <p>We received a request to reset your password. Click the button below to set a new permanent password:</p>
-            
-            <div style="margin-top: 30px;">
-              <a href="${recoveryUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Reset Password</a>
-            </div>
+    // 3. Dispatch email via Resend with strict error checking
+    if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+      throw new Error('Resend configuration is missing in environment variables.');
+    }
 
-            <p style="margin-top: 30px; font-size: 12px; color: #94a3b8;">If you did not request this, you can safely ignore this email.</p>
+    const { error: resendError } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL,
+      to: normalizedEmail,
+      subject: 'Reset Your PropManager HQ Password',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f172a; color: #f8fafc; border-radius: 12px;">
+          <h2 style="color: #fbbf24; margin-top: 0;">Password Reset Request</h2>
+          <p>Hello ${profile.full_name || 'User'},</p>
+          <p>We received a request to reset your password. Click the button below to set a new permanent password:</p>
+          
+          <div style="margin-top: 30px;">
+            <a href="${recoveryUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Reset Password</a>
           </div>
-        `,
-      });
+
+          <p style="margin-top: 30px; font-size: 12px; color: #94a3b8;">If you did not request this, you can safely ignore this email.</p>
+        </div>
+      `,
+    });
+
+    if (resendError) {
+      console.error('Resend dispatch error:', resendError);
+      throw new Error(`Failed to send email via Resend: ${resendError.message}`);
     }
 
     return NextResponse.json({
@@ -89,6 +96,7 @@ export async function POST(request: Request) {
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred.';
+    console.error('Forgot password exception:', errorMessage);
     return NextResponse.json({ success: false, error: errorMessage }, { status: 500 });
   }
 }
