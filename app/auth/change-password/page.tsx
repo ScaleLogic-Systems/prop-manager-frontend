@@ -6,30 +6,29 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabaseClient';
 import { Lock, Eye, EyeOff, AlertCircle, KeyRound, CheckCircle2 } from 'lucide-react';
 
-/** Map a profile role to the correct dashboard path safely */
-function dashboardForRole(rawRole: string): string {
-  const role = String(rawRole || '').toLowerCase().trim().replace(/[\s-]+/g, '_');
-  
+/** Map a profile role to the correct dashboard path */
+function dashboardForRole(role: string): string {
   switch (role) {
-    case 'super_admin':
+    case 'super-admin':
     case 'superadmin':
     case 'developer':
     case 'accountant':
       return '/super-admin';
     case 'property_manager':
+    case 'property-manager':
       return '/property-manager';
     case 'property_owner':
     case 'owner':
       return '/owner';
     case 'marketer':
     case 'sales':
-    case 'marketing':
-      return '/marketer';
+      return '/marketer'; // 👈 Added safely to resolve the marketer 404
     case 'caretaker':
       return '/caretaker';
     case 'tenant':
+      return '/tenant';
     default:
-      return '/tenant'; // Safe fallback instead of non-existent /dashboard
+      return '/dashboard';
   }
 }
 
@@ -49,55 +48,29 @@ export default function ChangePasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // 1. Verify and establish session on load (handles incoming email links with ?code=)
   useEffect(() => {
     let ignore = false;
-
     async function verifyAndSetupSession() {
       try {
-        const url = window.location.href;
-        
-        // 1. Handle URL Hash fragments (Supabase default token format: #access_token=...&refresh_token=...)
-        if (url.includes('#access_token=')) {
-          const hashPart = url.split('#')[1];
-          const hashParams = new URLSearchParams(hashPart);
-          const accessToken = hashParams.get('access_token');
-          const refreshToken = hashParams.get('refresh_token');
-
-          if (accessToken && refreshToken) {
-            await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-          }
-        }
-
-        // 2. Handle PKCE code parameter (?code=...)
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
+
         if (code) {
+          // Clear any stale cookies first
           await supabase.auth.signOut();
-          await supabase.auth.exchangeCodeForSession(code);
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            console.error('Code exchange error:', exchangeError);
+          }
         }
 
-        // 3. Verify active session exists now
         const { data: { session } } = await supabase.auth.getSession();
-        
         if (!ignore) {
-          if (session) {
-            setChecking(false);
-          } else {
-            // Give it one more brief check to account for async cookie settlement
-            setTimeout(async () => {
-              const { data: { session: retrySession } } = await supabase.auth.getSession();
-              if (!ignore) {
-                if (!retrySession) {
-                  router.replace('/login');
-                } else {
-                  setChecking(false);
-                }
-              }
-            }, 1000);
+          if (!session) {
+            router.replace('/login?next=/auth/change-password');
           }
+          setChecking(false);
         }
       } catch (err) {
         console.error('Session verification error:', err);
@@ -108,10 +81,7 @@ export default function ChangePasswordPage() {
     }
 
     verifyAndSetupSession();
-
-    return () => {
-      ignore = true;
-    };
+    return () => { ignore = true; };
   }, [router, supabase]);
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
@@ -131,7 +101,7 @@ export default function ChangePasswordPage() {
     setLoading(true);
 
     try {
-      // 1. Update auth password and clear must_change_password flag
+      // 1. Update auth password and clear must_change_password flag in metadata
       const { data: { user }, error: updateError } = await supabase.auth.updateUser({
         password,
         data: { must_change_password: false },
@@ -154,14 +124,13 @@ export default function ChangePasswordPage() {
         .eq('id', user.id)
         .single();
 
-      const userRole = profile?.role || 'tenant';
-      const destinationUrl = dashboardForRole(userRole);
+      const role = String(profile?.role || 'tenant').toLowerCase().trim().replace(/\s+/g, '_');
       
       setSuccess(true);
 
-      // 4. Redirect after success flash
+      // 4. Redirect after a brief success flash
       setTimeout(() => {
-        router.replace(destinationUrl);
+        router.replace(dashboardForRole(role));
       }, 1500);
 
     } catch (err: unknown) {
