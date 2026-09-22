@@ -28,6 +28,7 @@ export interface ManagedUser {
   role: UserRole;
   property_id?: string;
   property_name?: string;
+  unit_id?: string;      // 👈 Added this missing field
   unit_number?: string;
   status: 'active' | 'pending';
   invited_at: string;

@@ -1,3 +1,4 @@
+// app/caretaker/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -12,13 +13,15 @@ import {
   LogOut,
   FileText,
   HelpCircle,
-  Settings
+  Settings,
+  Users
 } from 'lucide-react';
 
 import { DashboardTab } from './tabs/DashboardTab';
 import { MeterReadingTab } from './tabs/MeterReadingTab';
 import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
 import { AddTenantTab } from './tabs/AddTenantTab';
+import { TenantsTab } from './tabs/TenantsTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import CaretakerSupportTab from './tabs/SupportTab';
@@ -29,6 +32,7 @@ export type CaretakerTab =
   | 'meter' 
   | 'generate-invoice'
   | 'add-tenant' 
+  | 'tenants'
   | 'payments' 
   | 'unassigned-payments' 
   | 'requests' 
@@ -140,6 +144,18 @@ export default function CaretakerPortalPage() {
             </button>
 
             <button
+              onClick={() => setActiveTab('tenants')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
+                activeTab === 'tenants'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <Users size={18} />
+              Tenants List
+            </button>
+
+            <button
               onClick={() => setActiveTab('payments')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
                 activeTab === 'payments'
@@ -242,6 +258,9 @@ export default function CaretakerPortalPage() {
         {activeTab === 'generate-invoice' && <InvoiceGenerationTab role="caretaker" />}
         {activeTab === 'add-tenant' && (
           <AddTenantTab propertyId={profile?.assigned_property_id} />
+        )}
+        {activeTab === 'tenants' && (
+          <TenantsTab propertyId={profile?.assigned_property_id} />
         )}
         {activeTab === 'payments' && (
           <PaymentsTab propertyId={profile?.assigned_property_id} />

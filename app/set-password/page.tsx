@@ -45,21 +45,38 @@ export default function SetPasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // Check whether the user already has an active session (arrived via magic link or
-  // signed in manually with the temp password).
   useEffect(() => {
     let ignore = false;
-    async function checkSession() {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!ignore) {
-        if (!session) {
-          // No session — redirect to login so they sign in first with temp password
-          router.replace('/login?next=/set-password');
+    async function verifyAndSetupSession() {
+      try {
+        // 1. Check if URL contains an invite/reset authorization code
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+
+        if (code) {
+          // Clear any stale admin session cookies before processing the new invite
+          await supabase.auth.signOut();
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          if (exchangeError) {
+            console.error('Code exchange error:', exchangeError);
+          }
         }
-        setChecking(false);
+
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!ignore) {
+          if (!session) {
+            router.replace('/login?next=/set-password');
+          }
+          setChecking(false);
+        }
+      } catch (err) {
+        console.error('Session verification error:', err);
+        if (!ignore) {
+          router.replace('/login');
+        }
       }
     }
-    checkSession();
+    verifyAndSetupSession();
     return () => { ignore = true; };
   }, [router, supabase]);
 
@@ -78,21 +95,25 @@ export default function SetPasswordPage() {
 
     setLoading(true);
     try {
-      // 1. Update the password
-      const { error: updateError } = await supabase.auth.updateUser({ password });
+      // 1. Update the password and clear must_change_password in user metadata
+      const { error: updateError } = await supabase.auth.updateUser({ 
+        password,
+        data: { must_change_password: false }
+      });
       if (updateError) throw updateError;
 
-      // 2. Clear the must_change_password flag from metadata
-      await supabase.auth.updateUser({ data: { must_change_password: false } });
-
-      // 3. Get session to find the role
+      // 2. Get active session to locate user ID
       const { data: { session } } = await supabase.auth.getSession();
       const userId = session?.user?.id;
-
       let role = session?.user?.user_metadata?.role as string | undefined;
 
-      // Also try fetching from profiles table for accuracy
       if (userId) {
+        // 3. Update profiles table
+        await supabase
+          .from('profiles')
+          .update({ must_change_password: false })
+          .eq('id', userId);
+
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -103,7 +124,7 @@ export default function SetPasswordPage() {
 
       setSuccess(true);
 
-      // 4. Redirect to role-appropriate dashboard after a brief success flash
+      // 4. Redirect to role-appropriate dashboard
       setTimeout(() => {
         router.replace(dashboardForRole(role ?? ''));
       }, 1500);
@@ -118,7 +139,7 @@ export default function SetPasswordPage() {
   if (checking) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-slate-400 text-sm animate-pulse">Verifying session…</div>
+        <div className="text-slate-400 text-sm animate-pulse">Verifying secure session…</div>
       </div>
     );
   }
@@ -126,7 +147,6 @@ export default function SetPasswordPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 mb-4">
             <KeyRound size={32} className="text-indigo-400" />
@@ -138,7 +158,6 @@ export default function SetPasswordPage() {
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-2xl space-y-5">
-          {/* Error */}
           {error && (
             <div className="p-3 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-xl text-xs flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0" />
@@ -146,7 +165,6 @@ export default function SetPasswordPage() {
             </div>
           )}
 
-          {/* Success */}
           {success ? (
             <div className="py-6 text-center space-y-3">
               <CheckCircle2 size={40} className="text-emerald-400 mx-auto" />
@@ -155,7 +173,6 @@ export default function SetPasswordPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
-              {/* New Password */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
                   <Lock size={12} /> New Password
@@ -180,7 +197,6 @@ export default function SetPasswordPage() {
                 </div>
               </div>
 
-              {/* Confirm Password */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5">
                   <Lock size={12} /> Confirm Password
@@ -204,7 +220,6 @@ export default function SetPasswordPage() {
                 </div>
               </div>
 
-              {/* Strength indicator */}
               {password.length > 0 && (
                 <div className="flex items-center gap-2">
                   {[...Array(4)].map((_, i) => (
@@ -242,4 +257,3 @@ export default function SetPasswordPage() {
     </div>
   );
 }
-

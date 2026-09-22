@@ -1,14 +1,19 @@
+// app/owner/tabs/UserManagementTab.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Shield, Home, Mail, CheckCircle, Clock, Loader2, AlertCircle, RefreshCw, Briefcase } from 'lucide-react';
+import { UserPlus, Shield, Home, Mail, CheckCircle, Clock, Loader2, AlertCircle, RefreshCw, Briefcase, UserX } from 'lucide-react';
 import { UserRole, PropertyOption, ManagedUser } from '../types';
+import { RemoveUserModal } from '@/components/modals/RemoveUserModal';
 
 export const UserManagementTab: React.FC = () => {
   const [availableProperties, setAvailableProperties] = useState<PropertyOption[]>([]);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [fetching, setFetching] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Modal state for user removal
+  const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
 
   // Form states
   const [fullName, setFullName] = useState('');
@@ -25,11 +30,10 @@ export const UserManagementTab: React.FC = () => {
     setFetchError(null);
     const errors: string[] = [];
 
-    // Path 1: Fetch Properties Overview (GET /owner/api/properties-overview)
     try {
       const propsRes = await fetch('/owner/api/properties-overview', { 
         cache: 'no-store',
-        credentials: 'include' // Ensures auth cookies are sent
+        credentials: 'include'
       });
       if (propsRes.ok) {
         const propsData = await propsRes.json();
@@ -51,11 +55,10 @@ export const UserManagementTab: React.FC = () => {
       errors.push(`Properties network error: ${err.message}`);
     }
 
-    // Path 2: Fetch Managed Users Directory (GET /owner/api/invite-user)
     try {
       const usersRes = await fetch('/owner/api/invite-user', { 
         cache: 'no-store',
-        credentials: 'include' // Ensures auth cookies are sent
+        credentials: 'include'
       });
       if (usersRes.ok) {
         const usersData = await usersRes.json();
@@ -86,11 +89,10 @@ export const UserManagementTab: React.FC = () => {
     setFeedback(null);
 
     try {
-      // Path 2: External Email & Database Endpoint (POST /owner/api/invite-user)
       const res = await fetch('/owner/api/invite-user', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Ensures auth cookies are sent
+        credentials: 'include',
         body: JSON.stringify({
           full_name: fullName,
           email,
@@ -116,7 +118,6 @@ export const UserManagementTab: React.FC = () => {
         msg: `Verification link sent successfully to ${email}. Record saved to database.`,
       });
 
-      // Reset form fields
       setFullName('');
       setEmail('');
       setPhone('');
@@ -317,6 +318,7 @@ export const UserManagementTab: React.FC = () => {
                   <th className="p-4">Unit</th>
                   <th className="p-4">Status</th>
                   <th className="p-4">Invited Date</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 text-sm">
@@ -355,6 +357,15 @@ export const UserManagementTab: React.FC = () => {
                       )}
                     </td>
                     <td className="p-4 text-gray-500">{usr.invited_at}</td>
+                    <td className="p-4 text-right">
+                      <button
+                        onClick={() => setSelectedUser(usr)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-semibold transition shadow-sm"
+                      >
+                        <UserX size={14} />
+                        Remove
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -362,6 +373,23 @@ export const UserManagementTab: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Confirmation & Removal Modal */}
+      {selectedUser && (
+        <RemoveUserModal
+          isOpen={!!selectedUser}
+          onClose={() => setSelectedUser(null)}
+          onSuccess={() => {
+            setSelectedUser(null);
+            fetchInitialData();
+          }}
+          targetUserId={selectedUser.id}
+          targetName={selectedUser.full_name}
+          targetRole={selectedUser.role}
+          propertyId={selectedUser.property_id}
+          unitId={selectedUser.unit_id}
+        />
+      )}
     </div>
   );
 };

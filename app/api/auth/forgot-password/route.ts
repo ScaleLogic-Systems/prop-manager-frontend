@@ -1,3 +1,4 @@
+// app/api/auth/forgot-password/route.ts
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { Resend } from 'resend';
@@ -42,13 +43,14 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Generate Supabase recovery action link
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://propmanager.co.ke';
+    // 2. Generate Supabase recovery action link pointing correctly to /set-password
+    const appUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://prop-manager-frontend.vercel.app';
+    
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: normalizedEmail,
       options: {
-        redirectTo: `${appUrl}/auth/change-password`,
+        redirectTo: `${appUrl}/set-password`, // 👈 Fixed redirect route
       },
     });
 

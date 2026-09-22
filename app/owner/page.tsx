@@ -1,3 +1,4 @@
+// app/owner/page.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -8,6 +9,7 @@ import { DashboardTab } from './tabs/DashboardTab';
 import AddPropertyTab from './tabs/AddPropertyTab';
 import { UserManagementTab } from './tabs/UserManagementTab';
 import { TenantsTab } from './tabs/TenantsTab';
+import { MeterReadingTab } from '@/components/MeterReadingTab'; // 👈 Updated shared import path
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import { SubscriptionsTab } from './tabs/SubscriptionsTab';
 import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
@@ -67,6 +69,8 @@ export default function OwnerPage() {
     switch (activeTab) {
       case 'dashboard':
         return <DashboardTab />;
+      case 'meter-reading':
+        return <MeterReadingTab />;
       case 'generate-invoice':
         return <InvoiceGenerationTab role="owner" />;
       case 'add-property':

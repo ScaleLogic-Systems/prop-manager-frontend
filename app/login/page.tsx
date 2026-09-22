@@ -123,14 +123,9 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-semibold text-slate-300">
-                Password
-              </label>
-              <Link href="/auth/forgot-password" className="text-xs text-indigo-400 hover:underline font-medium">
-                Forgot password?
-              </Link>
-            </div>
+            <label className="block text-xs font-semibold text-slate-300 mb-1">
+              Password
+            </label>
             <input
               type="password"
               required
@@ -139,6 +134,12 @@ export default function LoginPage() {
               placeholder="••••••••••••"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition"
             />
+            {/* Repositioned Forgot Password link neatly below password input */}
+            <div className="flex justify-end mt-1.5">
+              <Link href="/auth/forgot-password" className="text-xs text-indigo-400 hover:underline font-medium">
+                Forgot password?
+              </Link>
+            </div>
           </div>
 
           <button

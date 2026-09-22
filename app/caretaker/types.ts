@@ -1,12 +1,34 @@
+// app/caretaker/types.ts
+
 export type CaretakerTab = 
   | 'dashboard' 
+  | 'meter'
   | 'meter-reading' 
+  | 'generate-invoice'
+  | 'add-tenant'
+  | 'tenants' 
   | 'payments' 
-  | 'add-tenant';
+  | 'unassigned-payments'
+  | 'requests'
+  | 'support'
+  | 'settings';
 
 export interface CaretakerProfile {
+  id?: string;
   full_name: string;
+  assigned_property_id?: string;
   assigned_property_name: string;
+}
+
+export interface TenantRecord {
+  id: string;
+  tenant_name: string;
+  email: string;
+  phone: string;
+  unit_id: string;
+  unit_number: string;
+  property_id: string;
+  property_name: string;
 }
 
 export interface UnitMeterData {

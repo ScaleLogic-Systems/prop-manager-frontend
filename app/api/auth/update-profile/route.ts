@@ -1,4 +1,7 @@
+// app/api/auth/update-profile/route.ts
+import { createServerClient } from '@supabase/ssr';
 import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 const supabaseAdmin = createClient(
@@ -12,21 +15,48 @@ const supabaseAdmin = createClient(
   }
 );
 
-export async function POST(request: Request) {
+export async function PUT(request: Request) {
   try {
-    const { userId, fullName, phone, email } = await request.json();
+    const cookieStore = await cookies();
+    
+    // Securely identify the logged-in user from request cookies
+    const supabaseServer = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value;
+          },
+        },
+      }
+    );
 
-    if (!userId) {
-      return NextResponse.json({ success: false, error: 'User ID is required.' }, { status: 400 });
+    const { data: { user }, error: authUserError } = await supabaseServer.auth.getUser();
+    if (authUserError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized session.' }, { status: 401 });
     }
+
+    const userId = user.id;
+    const { fullName, phone, email, password } = await request.json();
 
     const trimmedEmail = email ? email.trim().toLowerCase() : undefined;
     const trimmedName = fullName ? fullName.trim() : undefined;
     const trimmedPhone = phone ? phone.trim() : undefined;
 
-    // 1. Update Supabase Auth if email or name/phone metadata changed
-    const authUpdates: { email?: string; user_metadata?: { full_name?: string; phone?: string } } = {};
-    if (trimmedEmail) authUpdates.email = trimmedEmail;
+    // 1. Prepare Supabase Auth updates (Email, Password, Metadata)
+    const authUpdates: { 
+      email?: string; 
+      password?: string;
+      user_metadata?: { full_name?: string; phone?: string } 
+    } = {};
+
+    if (trimmedEmail && trimmedEmail !== user.email) {
+      authUpdates.email = trimmedEmail;
+    }
+    if (password && password.trim().length >= 6) {
+      authUpdates.password = password.trim();
+    }
     if (trimmedName || trimmedPhone) {
       authUpdates.user_metadata = {};
       if (trimmedName) authUpdates.user_metadata.full_name = trimmedName;
