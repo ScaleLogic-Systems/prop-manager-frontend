@@ -50,44 +50,51 @@ export default function ChangePasswordPage() {
   useEffect(() => {
     let ignore = false;
 
-    // Listen to auth state changes to catch sessions as soon as they settle
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!ignore && session) {
-        setChecking(false);
-      }
-    });
-
     async function verifyAndSetupSession() {
       try {
+        const url = window.location.href;
+        
+        // 1. Handle URL Hash fragments (Supabase default token format: #access_token=...&refresh_token=...)
+        if (url.includes('#access_token=')) {
+          const hashPart = url.split('#')[1];
+          const hashParams = new URLSearchParams(hashPart);
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+          }
+        }
+
+        // 2. Handle PKCE code parameter (?code=...)
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
-        const tokenHash = params.get('token_hash');
-        const type = params.get('type');
-
         if (code) {
           await supabase.auth.signOut();
           await supabase.auth.exchangeCodeForSession(code);
-        } else if (tokenHash && type) {
-          await supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as any });
         }
 
-        // Initial session check with a short grace period for storage sync
+        // 3. Verify active session exists now
         const { data: { session } } = await supabase.auth.getSession();
+        
         if (!ignore) {
           if (session) {
             setChecking(false);
           } else {
-            // Give storage 600ms to settle before deciding to redirect to login
+            // Give it one more brief check to account for async cookie settlement
             setTimeout(async () => {
               const { data: { session: retrySession } } = await supabase.auth.getSession();
               if (!ignore) {
                 if (!retrySession) {
-                  router.replace('/login?next=/auth/change-password');
+                  router.replace('/login');
                 } else {
                   setChecking(false);
                 }
               }
-            }, 600);
+            }, 1000);
           }
         }
       } catch (err) {
@@ -102,7 +109,6 @@ export default function ChangePasswordPage() {
 
     return () => {
       ignore = true;
-      subscription.unsubscribe();
     };
   }, [router, supabase]);
 
