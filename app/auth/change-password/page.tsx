@@ -50,17 +50,45 @@ export default function ChangePasswordPage() {
   useEffect(() => {
     let ignore = false;
 
-    async function verifySession() {
+    async function verifyAndSetupSession() {
       try {
+        const url = window.location.href;
+        
+        // 1. Handle URL Hash fragments (Supabase recovery/invite format: #access_token=...&refresh_token=...)
+        if (url.includes('#access_token=')) {
+          const hashPart = url.split('#')[1];
+          const hashParams = new URLSearchParams(hashPart);
+          const accessToken = hashParams.get('access_token');
+          const refreshToken = hashParams.get('refresh_token');
+
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+          }
+        }
+
+        // 2. Handle PKCE code parameter (?code=...)
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
-
         if (code) {
+          await supabase.auth.signOut();
           await supabase.auth.exchangeCodeForSession(code);
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
-        
+        // 3. Verify active session exists with a brief settlement buffer
+        const getSession = async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          return session;
+        };
+
+        let session = await getSession();
+        if (!session) {
+          await new Promise((res) => setTimeout(res, 500));
+          session = await getSession();
+        }
+
         if (!ignore) {
           if (!session) {
             router.replace('/login');
@@ -69,14 +97,14 @@ export default function ChangePasswordPage() {
           }
         }
       } catch (err) {
-        console.error('Session check error:', err);
+        console.error('Session verification error:', err);
         if (!ignore) {
           router.replace('/login');
         }
       }
     }
 
-    verifySession();
+    verifyAndSetupSession();
     return () => { ignore = true; };
   }, [router, supabase]);
 
