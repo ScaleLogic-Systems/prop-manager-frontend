@@ -92,9 +92,25 @@ export async function POST(request: Request) {
       process.env.NEXT_PUBLIC_APP_URL || 
       'https://prop-manager-frontend.vercel.app';
       
-    const changePasswordUrl = `${appUrl}/auth/change-password`;
+    const redirectToUrl = `${appUrl}/auth/change-password`;
 
-    // 4. Send email via Resend (with graceful fallback logging if email fails)
+    // 4. Generate a secure, authenticated recovery/magic link via Supabase Admin API
+    const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+      type: 'recovery',
+      email: normalizedEmail,
+      options: {
+        redirectTo: redirectToUrl,
+      },
+    });
+
+    if (linkError) {
+      console.error('Failed to generate action link:', linkError);
+    }
+
+    // Fallback to standard change password URL if action_link generation fails
+    const secureActionLink = linkData?.properties?.action_link || redirectToUrl;
+
+    // 5. Send email via Resend
     if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
       const { error: resendError } = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL,
@@ -110,10 +126,10 @@ export async function POST(request: Request) {
               <code style="background: #0f172a; padding: 8px 12px; display: inline-block; border-radius: 6px; color: #34d399; font-size: 16px; font-family: monospace;">${tempPassword}</code>
             </div>
 
-            <p>For security reasons, you are required to set a permanent password upon your first sign-in.</p>
+            <p>For security reasons, please click the button below to set your permanent password.</p>
             
             <div style="margin-top: 30px;">
-              <a href="${changePasswordUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Sign In & Set Password</a>
+              <a href="${secureActionLink}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Set Permanent Password</a>
             </div>
           </div>
         `,
@@ -121,13 +137,12 @@ export async function POST(request: Request) {
 
       if (resendError) {
         console.error('Resend onboarding email dispatch error:', resendError);
-        // We log it but don't crash the user creation, since the account is successfully created in Supabase
       }
     }
 
     return NextResponse.json({
       success: true,
-      message: `User successfully invited and temporary password dispatched to ${normalizedEmail}.`,
+      message: `User successfully invited and secure activation link dispatched to ${normalizedEmail}.`,
     });
 
   } catch (error: unknown) {
