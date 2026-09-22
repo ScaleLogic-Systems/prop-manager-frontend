@@ -47,29 +47,48 @@ export default function ChangePasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // 1. Verify and establish session on load (handles incoming email links with ?code=)
   useEffect(() => {
     let ignore = false;
+
+    // Listen to auth state changes to catch sessions as soon as they settle
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!ignore && session) {
+        setChecking(false);
+      }
+    });
+
     async function verifyAndSetupSession() {
       try {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
+        const tokenHash = params.get('token_hash');
+        const type = params.get('type');
 
         if (code) {
-          // Clear any stale admin cookies first
           await supabase.auth.signOut();
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) {
-            console.error('Code exchange error:', exchangeError);
-          }
+          await supabase.auth.exchangeCodeForSession(code);
+        } else if (tokenHash && type) {
+          await supabase.auth.verifyOtp({ token_hash: tokenHash, type: type as any });
         }
 
+        // Initial session check with a short grace period for storage sync
         const { data: { session } } = await supabase.auth.getSession();
         if (!ignore) {
-          if (!session) {
-            router.replace('/login?next=/auth/change-password');
+          if (session) {
+            setChecking(false);
+          } else {
+            // Give storage 600ms to settle before deciding to redirect to login
+            setTimeout(async () => {
+              const { data: { session: retrySession } } = await supabase.auth.getSession();
+              if (!ignore) {
+                if (!retrySession) {
+                  router.replace('/login?next=/auth/change-password');
+                } else {
+                  setChecking(false);
+                }
+              }
+            }, 600);
           }
-          setChecking(false);
         }
       } catch (err) {
         console.error('Session verification error:', err);
@@ -80,7 +99,11 @@ export default function ChangePasswordPage() {
     }
 
     verifyAndSetupSession();
-    return () => { ignore = true; };
+
+    return () => {
+      ignore = true;
+      subscription.unsubscribe();
+    };
   }, [router, supabase]);
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
@@ -100,7 +123,7 @@ export default function ChangePasswordPage() {
     setLoading(true);
 
     try {
-      // 1. Update auth password and clear must_change_password flag in metadata
+      // 1. Update auth password and clear must_change_password flag
       const { data: { user }, error: updateError } = await supabase.auth.updateUser({
         password,
         data: { must_change_password: false },
@@ -127,7 +150,7 @@ export default function ChangePasswordPage() {
       
       setSuccess(true);
 
-      // 4. Redirect after a brief success flash
+      // 4. Redirect after success flash
       setTimeout(() => {
         router.replace(dashboardForRole(role));
       }, 1500);
