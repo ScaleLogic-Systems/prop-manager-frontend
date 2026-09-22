@@ -94,7 +94,7 @@ export async function POST(request: Request) {
       
     const redirectToUrl = `${appUrl}/auth/change-password`;
 
-    // 4. Generate a secure, authenticated recovery/magic link via Supabase Admin API
+    // 4. Generate a secure, authenticated action link via Supabase Admin API
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: normalizedEmail,
@@ -107,10 +107,9 @@ export async function POST(request: Request) {
       console.error('Failed to generate action link:', linkError);
     }
 
-    // Fallback to standard change password URL if action_link generation fails
     const secureActionLink = linkData?.properties?.action_link || redirectToUrl;
 
-    // 5. Send email via Resend
+    // 5. Send email via Resend with the secure action link
     if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
       const { error: resendError } = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL,
