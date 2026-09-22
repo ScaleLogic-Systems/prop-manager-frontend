@@ -6,28 +6,30 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabaseClient';
 import { Lock, Eye, EyeOff, AlertCircle, KeyRound, CheckCircle2 } from 'lucide-react';
 
-/** Map a profile role to the correct dashboard path */
-function dashboardForRole(role: string): string {
+/** Map a profile role to the correct dashboard path safely */
+function dashboardForRole(rawRole: string): string {
+  const role = String(rawRole || '').toLowerCase().trim().replace(/[\s-]+/g, '_');
+  
   switch (role) {
-    case 'super-admin':
+    case 'super_admin':
     case 'superadmin':
     case 'developer':
     case 'accountant':
       return '/super-admin';
     case 'property_manager':
-    case 'property-manager':
       return '/property-manager';
     case 'property_owner':
     case 'owner':
       return '/owner';
     case 'marketer':
+    case 'sales':
+    case 'marketing':
       return '/marketer';
     case 'caretaker':
       return '/caretaker';
     case 'tenant':
-      return '/tenant';
     default:
-      return '/dashboard';
+      return '/tenant'; // Safe fallback instead of non-existent /dashboard
   }
 }
 
@@ -152,13 +154,14 @@ export default function ChangePasswordPage() {
         .eq('id', user.id)
         .single();
 
-      const role = String(profile?.role || 'tenant').toLowerCase().trim().replace(/\s+/g, '_');
+      const userRole = profile?.role || 'tenant';
+      const destinationUrl = dashboardForRole(userRole);
       
       setSuccess(true);
 
       // 4. Redirect after success flash
       setTimeout(() => {
-        router.replace(dashboardForRole(role));
+        router.replace(destinationUrl);
       }, 1500);
 
     } catch (err: unknown) {
