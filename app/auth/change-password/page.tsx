@@ -12,9 +12,11 @@ function dashboardForRole(rawRole: string): string {
   switch (role) {
     case 'super_admin':
     case 'superadmin':
-    case 'developer':
-    case 'accountant':
       return '/super-admin';
+    case 'developer':
+      return '/developer';
+    case 'accountant':
+      return '/accountant';
     case 'property_manager':
       return '/property-manager';
     case 'property_owner':
