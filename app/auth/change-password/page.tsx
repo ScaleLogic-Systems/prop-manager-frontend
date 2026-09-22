@@ -4,31 +4,31 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabaseClient';
-import { Lock, Eye, EyeOff, AlertCircle, KeyRound, CheckCircle2 } from 'lucide-react';
+import { Lock, Eye, EyeOff, AlertCircle, KeyRound, CheckCircle2, Mail } from 'lucide-react';
 
 /** Map a profile role to the correct dashboard path */
-function dashboardForRole(role: string): string {
+function dashboardForRole(rawRole: string): string {
+  const role = String(rawRole || '').toLowerCase().trim().replace(/[\s-]+/g, '_');
   switch (role) {
-    case 'super-admin':
+    case 'super_admin':
     case 'superadmin':
     case 'developer':
     case 'accountant':
       return '/super-admin';
     case 'property_manager':
-    case 'property-manager':
       return '/property-manager';
     case 'property_owner':
     case 'owner':
       return '/owner';
     case 'marketer':
     case 'sales':
+    case 'marketing':
       return '/marketer';
     case 'caretaker':
       return '/caretaker';
     case 'tenant':
-      return '/tenant';
     default:
-      return '/dashboard';
+      return '/tenant';
   }
 }
 
@@ -36,72 +36,58 @@ export default function ChangePasswordPage() {
   const router = useRouter();
   const supabase = createClient();
 
+  const [checking, setChecking] = useState(true);
+  const [hasSession, setHasSession] = useState(false);
+
+  // Form fields
+  const [email, setEmail] = useState('');
+  const [tempPassword, setTempPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
-  // Show/Hide password toggle states
+
+  // Show/Hide password toggles
+  const [showTempPw, setShowTempPw] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // 1. Verify and establish session on load with a cookie settlement buffer
   useEffect(() => {
     let ignore = false;
-    async function verifyAndSetupSession() {
+    async function initSessionCheck() {
       try {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
-
         if (code) {
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-          if (exchangeError) {
-            console.error('Code exchange error:', exchangeError);
-          }
+          await supabase.auth.exchangeCodeForSession(code);
         }
 
-        // Helper to check session
-        const getActiveSession = async () => {
-          const { data: { session } } = await supabase.auth.getSession();
-          return session;
-        };
-
-        let session = await getActiveSession();
-
-        // If session isn't immediately found, give storage 600ms to settle cookies
-        if (!session) {
-          await new Promise((resolve) => setTimeout(resolve, 600));
-          session = await getActiveSession();
-        }
-
+        const { data: { session } } = await supabase.auth.getSession();
         if (!ignore) {
-          if (!session) {
-            router.replace('/login?next=/auth/change-password');
-          } else {
-            setChecking(false);
-          }
+          setHasSession(!!session);
+          setChecking(false);
         }
       } catch (err) {
-        console.error('Session verification error:', err);
+        console.error('Session check error:', err);
         if (!ignore) {
-          router.replace('/login');
+          setHasSession(false);
+          setChecking(false);
         }
       }
     }
 
-    verifyAndSetupSession();
+    initSessionCheck();
     return () => { ignore = true; };
-  }, [router, supabase]);
+  }, [supabase]);
 
-  const handlePasswordUpdate = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match.');
+      setError('New passwords do not match.');
       return;
     }
 
@@ -113,36 +99,59 @@ export default function ChangePasswordPage() {
     setLoading(true);
 
     try {
-      // 1. Update auth password and clear must_change_password flag in metadata
-      const { data: { user }, error: updateError } = await supabase.auth.updateUser({
+      let userId = '';
+
+      // If user came from onboarding email without a pre-existing session, sign them in with their temp password first
+      if (!hasSession) {
+        if (!email || !tempPassword) {
+          throw new Error('Please enter your email and temporary password.');
+        }
+
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim().toLowerCase(),
+          password: tempPassword,
+        });
+
+        if (signInError || !signInData.user) {
+          throw new Error('Invalid email or temporary password. Please check your credentials.');
+        }
+
+        userId = signInData.user.id;
+      } else {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Active session not found. Please log in again.');
+        userId = user.id;
+      }
+
+      // Update password and clear must_change_password flag in auth metadata
+      const { error: updateError } = await supabase.auth.updateUser({
         password,
         data: { must_change_password: false },
       });
 
-      if (updateError || !user) {
-        throw new Error(updateError?.message || 'Failed to update password. Auth session missing or expired.');
+      if (updateError) {
+        throw new Error(updateError.message);
       }
 
-      // 2. Update profiles table state
+      // Update profiles table state
       await supabase
         .from('profiles')
         .update({ must_change_password: false })
-        .eq('id', user.id);
+        .eq('id', userId);
 
-      // 3. Get user role for correct dashboard redirection
+      // Fetch user role for correct dashboard redirection
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
 
-      const role = String(profile?.role || 'tenant').toLowerCase().trim().replace(/\s+/g, '_');
-      
-      setSuccess(true);
+      const role = profile?.role || 'tenant';
+      const destination = dashboardForRole(role);
 
-      // 4. Redirect after a brief success flash
+      setSuccess(true);
       setTimeout(() => {
-        router.replace(dashboardForRole(role));
+        router.replace(destination);
       }, 1500);
 
     } catch (err: unknown) {
@@ -155,7 +164,7 @@ export default function ChangePasswordPage() {
   if (checking) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-slate-400 text-sm animate-pulse">Verifying secure session...</div>
+        <div className="text-slate-400 text-sm animate-pulse">Initializing secure verification...</div>
       </div>
     );
   }
@@ -163,14 +172,15 @@ export default function ChangePasswordPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 flex items-center justify-center p-4 text-slate-100">
       <div className="w-full max-w-md">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center bg-indigo-600/20 border border-indigo-500/30 rounded-2xl p-4 mb-4">
             <KeyRound size={32} className="text-indigo-400" />
           </div>
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Set Permanent Password</h1>
           <p className="text-slate-400 text-sm mt-1">
-            You are logging in with a temporary password. Please create a new password to continue.
+            {hasSession
+              ? 'Create your permanent password to continue.'
+              : 'Enter your temporary credentials and choose your new permanent password.'}
           </p>
         </div>
 
@@ -189,11 +199,55 @@ export default function ChangePasswordPage() {
               <p className="text-slate-400 text-xs">Redirecting you to your dashboard...</p>
             </div>
           ) : (
-            <form onSubmit={handlePasswordUpdate} className="space-y-4">
-              {/* New Password Field with Toggle */}
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* If no session, collect email & temporary password */}
+              {!hasSession && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Mail size={12} /> Email Address
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
+                      <Lock size={12} /> Temporary Password (from email)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showTempPw ? 'text' : 'password'}
+                        required
+                        value={tempPassword}
+                        onChange={(e) => setTempPassword(e.target.value)}
+                        placeholder="Temporary password"
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 pr-11 text-white text-sm placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowTempPw((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                      >
+                        {showTempPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-800 my-2 pt-2"></div>
+                </>
+              )}
+
+              {/* New Password */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
-                  <Lock size={12} /> New Password
+                  <Lock size={12} /> New Permanent Password
                 </label>
                 <div className="relative">
                   <input
@@ -215,7 +269,7 @@ export default function ChangePasswordPage() {
                 </div>
               </div>
 
-              {/* Confirm Password Field with Toggle */}
+              {/* Confirm Password */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5 flex items-center gap-1.5">
                   <Lock size={12} /> Confirm New Password
