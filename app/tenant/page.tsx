@@ -1,20 +1,15 @@
+// app/tenant/page.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Phone, LayoutDashboard, History } from 'lucide-react';
+import { Phone, LayoutDashboard, History, Settings } from 'lucide-react';
+import { TenantTab, TenantProfile } from './types';
 import { DashboardTab } from './tabs/DashboardTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
-
-interface TenantProfile {
-  full_name: string;
-  property_name: string;
-  unit_number: string;
-  caretaker_name?: string;
-  caretaker_phone?: string;
-}
+import { SettingsTab } from './tabs/SettingsTab'; // 👈 Imported from tenant tabs wrapper
 
 export default function TenantPortalPage() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'payments'>('dashboard');
+  const [activeTab, setActiveTab] = useState<TenantTab>('dashboard');
   const [profile, setProfile] = useState<TenantProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -52,6 +47,19 @@ export default function TenantPortalPage() {
     }
   };
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return <DashboardTab />;
+      case 'payments':
+        return <PaymentsTab />;
+      case 'settings':
+        return <SettingsTab />; // 👈 Rendered via tenant tabs wrapper
+      default:
+        return <DashboardTab />;
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 flex">
       {/* SIDEBAR NAVIGATION */}
@@ -80,6 +88,17 @@ export default function TenantPortalPage() {
             >
               <History size={18} />
               Payment History
+            </button>
+            <button
+              onClick={() => setActiveTab('settings')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
+                activeTab === 'settings'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <Settings size={18} />
+              Settings
             </button>
           </nav>
         </div>
@@ -121,7 +140,7 @@ export default function TenantPortalPage() {
         </div>
 
         {/* TAB CONTENTS */}
-        {activeTab === 'dashboard' ? <DashboardTab /> : <PaymentsTab />}
+        {renderTabContent()}
       </main>
     </div>
   );

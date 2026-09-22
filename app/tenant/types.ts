@@ -1,4 +1,5 @@
-export type TenantTab = 'dashboard' | 'payments';
+// app/tenant/types.ts
+export type TenantTab = 'dashboard' | 'payments' | 'settings';
 
 export interface TenantProfile {
   full_name: string;
