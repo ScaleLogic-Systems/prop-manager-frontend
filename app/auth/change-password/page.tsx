@@ -22,7 +22,7 @@ function dashboardForRole(role: string): string {
       return '/owner';
     case 'marketer':
     case 'sales':
-      return '/marketer'; // 👈 Added safely to resolve the marketer 404
+      return '/marketer';
     case 'caretaker':
       return '/caretaker';
     case 'tenant':
@@ -48,7 +48,7 @@ export default function ChangePasswordPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  // 1. Verify and establish session on load (handles incoming email links with ?code=)
+  // 1. Verify and establish session on load with a cookie settlement buffer
   useEffect(() => {
     let ignore = false;
     async function verifyAndSetupSession() {
@@ -57,20 +57,32 @@ export default function ChangePasswordPage() {
         const code = params.get('code');
 
         if (code) {
-          // Clear any stale cookies first
-          await supabase.auth.signOut();
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
           if (exchangeError) {
             console.error('Code exchange error:', exchangeError);
           }
         }
 
-        const { data: { session } } = await supabase.auth.getSession();
+        // Helper to check session
+        const getActiveSession = async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          return session;
+        };
+
+        let session = await getActiveSession();
+
+        // If session isn't immediately found, give storage 600ms to settle cookies
+        if (!session) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+          session = await getActiveSession();
+        }
+
         if (!ignore) {
           if (!session) {
             router.replace('/login?next=/auth/change-password');
+          } else {
+            setChecking(false);
           }
-          setChecking(false);
         }
       } catch (err) {
         console.error('Session verification error:', err);
