@@ -4,7 +4,32 @@
 import { useEffect, useState, FormEvent } from 'react';
 import { createClient } from '@/lib/supabaseClient';
 import { Sparkles, Building, RefreshCw, Plus, Edit2, X, CheckCircle2, AlertCircle } from 'lucide-react';
-import { Property, Unit } from '../types';
+
+interface UtilityItem {
+  name: string;
+  amount: number;
+}
+
+interface Unit {
+  id: string;
+  property_id: string;
+  unit_number: string;
+  rent_amount: number;
+  deposit_fee: number | null;
+  use_type: 'residential' | 'commercial';
+  vat_treatment: 'A_EXEMPT' | 'B_STANDARD_16';
+  vat_rate: number;
+  water_fee: number | null;
+  utilities: UtilityItem[];
+  is_occupied: boolean;
+}
+
+interface Property {
+  id: string;
+  name: string;
+  location: string;
+  units: Unit[];
+}
 
 interface AddPropertyTabProps {
   currentUserId?: string;
@@ -18,16 +43,17 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
 
   const [unitNumber, setUnitNumber] = useState('');
   const [rentAmount, setRentAmount] = useState<number | ''>('');
+  const [depositFee, setDepositFee] = useState<number | ''>('');
+  const [useType, setUseType] = useState<'residential' | 'commercial'>('residential');
 
-  // Fees state
-  const [garbageFee, setGarbageFee] = useState<number | ''>(0);
-  const [isGarbageNA, setIsGarbageNA] = useState(false);
-
-  const [parkingFee, setParkingFee] = useState<number | ''>(0);
-  const [isParkingNA, setIsParkingNA] = useState(false);
-
+  // Water Meter state
   const [waterFee, setWaterFee] = useState<number | ''>(0);
   const [isWaterNA, setIsWaterNA] = useState(false);
+
+  // Dynamic Utilities State
+  const [utilities, setUtilities] = useState<UtilityItem[]>([]);
+  const [tempUtilityName, setTempUtilityName] = useState('');
+  const [tempUtilityFee, setTempUtilityFee] = useState<number | ''>('');
 
   // Status states
   const [submitting, setSubmitting] = useState(false);
@@ -42,15 +68,14 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [editUnitNumber, setEditUnitNumber] = useState('');
   const [editRentAmount, setEditRentAmount] = useState<number | ''>('');
-
-  const [editGarbageFee, setEditGarbageFee] = useState<number | ''>(0);
-  const [isEditGarbageNA, setIsEditGarbageNA] = useState(false);
-
-  const [editParkingFee, setEditParkingFee] = useState<number | ''>(0);
-  const [isEditParkingNA, setIsEditParkingNA] = useState(false);
+  const [editDepositFee, setEditDepositFee] = useState<number | ''>('');
+  const [editUseType, setEditUseType] = useState<'residential' | 'commercial'>('residential');
 
   const [editWaterFee, setEditWaterFee] = useState<number | ''>(0);
   const [isEditWaterNA, setIsEditWaterNA] = useState(false);
+  const [editUtilities, setEditUtilities] = useState<UtilityItem[]>([]);
+  const [editTempName, setEditTempName] = useState('');
+  const [editTempFee, setEditTempFee] = useState<number | ''>('');
 
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -93,11 +118,36 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
     fetchProperties();
   }, [currentUserId]);
 
+  const handleAddUtility = () => {
+    if (!tempUtilityName.trim() || tempUtilityFee === '') return;
+    setUtilities([...utilities, { name: tempUtilityName.trim(), amount: Number(tempUtilityFee) }]);
+    setTempUtilityName('');
+    setTempUtilityFee('');
+  };
+
+  const handleRemoveUtility = (index: number) => {
+    setUtilities(utilities.filter((_, i) => i !== index));
+  };
+
+  const handleAddEditUtility = () => {
+    if (!editTempName.trim() || editTempFee === '') return;
+    setEditUtilities([...editUtilities, { name: editTempName.trim(), amount: Number(editTempFee) }]);
+    setEditTempName('');
+    setEditTempFee('');
+  };
+
+  const handleRemoveEditUtility = (index: number) => {
+    setEditUtilities(editUtilities.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setFormError(null);
     setFormSuccess(null);
+
+    const vatTreatment = useType === 'residential' ? 'A_EXEMPT' : 'B_STANDARD_16';
+    const vatRate = useType === 'residential' ? 0 : 0.16;
 
     try {
       const payload = {
@@ -105,9 +155,12 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
         location: location.trim(),
         unitNumber: unitNumber.trim(),
         rentAmount: Number(rentAmount) || 0,
-        garbageFee: isGarbageNA ? null : Number(garbageFee) || 0,
-        parkingFee: isParkingNA ? null : Number(parkingFee) || 0,
+        depositFee: depositFee !== '' ? Number(depositFee) : null,
+        useType,
+        vatTreatment,
+        vatRate,
         waterFee: isWaterNA ? null : Number(waterFee) || 0,
+        utilities,
       };
 
       const supabase = createClient();
@@ -134,14 +187,11 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
       setFormSuccess(`Successfully saved ${payload.propertyName} - Unit ${payload.unitNumber}`);
       setUnitNumber('');
       setRentAmount('');
-
-      // Reset fees
-      setGarbageFee(0);
-      setIsGarbageNA(false);
-      setParkingFee(0);
-      setIsParkingNA(false);
+      setDepositFee('');
+      setUseType('residential');
       setWaterFee(0);
       setIsWaterNA(false);
+      setUtilities([]);
 
       fetchProperties();
     } catch (err: unknown) {
@@ -156,15 +206,12 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
     setEditingUnit(unit);
     setEditUnitNumber(unit.unit_number);
     setEditRentAmount(unit.rent_amount ?? '');
-
-    setIsEditGarbageNA(unit.garbage_fee === null);
-    setEditGarbageFee(unit.garbage_fee === null ? '' : unit.garbage_fee);
-
-    setIsEditParkingNA(unit.parking_fee === null);
-    setEditParkingFee(unit.parking_fee === null ? '' : unit.parking_fee);
+    setEditDepositFee(unit.deposit_fee ?? '');
+    setEditUseType(unit.use_type);
 
     setIsEditWaterNA(unit.water_fee === null);
     setEditWaterFee(unit.water_fee === null ? '' : unit.water_fee);
+    setEditUtilities(unit.utilities || []);
 
     setEditError(null);
   };
@@ -176,14 +223,20 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
     setEditSubmitting(true);
     setEditError(null);
 
+    const vatTreatment = editUseType === 'residential' ? 'A_EXEMPT' : 'B_STANDARD_16';
+    const vatRate = editUseType === 'residential' ? 0 : 0.16;
+
     try {
       const payload = {
         unitId: editingUnit.id,
         unitNumber: editUnitNumber.trim(),
         rentAmount: Number(editRentAmount) || 0,
-        garbageFee: isEditGarbageNA ? null : Number(editGarbageFee) || 0,
-        parkingFee: isEditParkingNA ? null : Number(editParkingFee) || 0,
+        depositFee: editDepositFee !== '' ? Number(editDepositFee) : null,
+        useType: editUseType,
+        vatTreatment,
+        vatRate,
         waterFee: isEditWaterNA ? null : Number(editWaterFee) || 0,
+        utilities: editUtilities,
       };
 
       const supabase = createClient();
@@ -229,7 +282,7 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
             Add New Property & Units
           </h1>
           <p className="text-blue-100 text-sm mt-1 max-w-xl">
-            Configure property names, locations, unit numbers, and custom fee structures for onboarding clients.
+            Configure property names, locations, unit numbers, water meters, and dynamic utility fees for onboarding clients.
           </p>
         </div>
       </div>
@@ -317,62 +370,33 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
               />
             </div>
 
-            {/* Garbage Fee */}
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Garbage Fee
-                </label>
-                <label className="text-xs text-gray-500 flex items-center gap-1 cursor-pointer font-medium">
-                  <input
-                    type="checkbox"
-                    checked={isGarbageNA}
-                    onChange={(e) => {
-                      setIsGarbageNA(e.target.checked);
-                      if (e.target.checked) setGarbageFee('');
-                    }}
-                    className="rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  N/A
-                </label>
-              </div>
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                Security Deposit (KES) *
+              </label>
               <input
                 type="number"
-                disabled={isGarbageNA}
-                placeholder={isGarbageNA ? 'N/A' : '0'}
-                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition disabled:bg-gray-100 disabled:text-gray-400"
-                value={isGarbageNA ? '' : garbageFee}
-                onChange={(e) => setGarbageFee(e.target.value ? Number(e.target.value) : 0)}
+                min="0"
+                required
+                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                value={depositFee}
+                onChange={(e) => setDepositFee(e.target.value ? Number(e.target.value) : '')}
               />
             </div>
 
-            {/* Parking Fee */}
             <div>
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                  Parking Fee
-                </label>
-                <label className="text-xs text-gray-500 flex items-center gap-1 cursor-pointer font-medium">
-                  <input
-                    type="checkbox"
-                    checked={isParkingNA}
-                    onChange={(e) => {
-                      setIsParkingNA(e.target.checked);
-                      if (e.target.checked) setParkingFee('');
-                    }}
-                    className="rounded text-blue-600 focus:ring-blue-500"
-                  />
-                  N/A
-                </label>
-              </div>
-              <input
-                type="number"
-                disabled={isParkingNA}
-                placeholder={isParkingNA ? 'N/A' : '0'}
-                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition disabled:bg-gray-100 disabled:text-gray-400"
-                value={isParkingNA ? '' : parkingFee}
-                onChange={(e) => setParkingFee(e.target.value ? Number(e.target.value) : 0)}
-              />
+              <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                Unit Use *
+              </label>
+              <select
+                required
+                className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition"
+                value={useType}
+                onChange={(e) => setUseType(e.target.value as 'residential' | 'commercial')}
+              >
+                <option value="residential">Residential (VAT-Exempt)</option>
+                <option value="commercial">Commercial (eTIMS Standard VAT)</option>
+              </select>
             </div>
 
             {/* Water Fee / Meter */}
@@ -403,6 +427,57 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
                 onChange={(e) => setWaterFee(e.target.value ? Number(e.target.value) : 0)}
               />
             </div>
+          </div>
+
+          {/* Dynamic Utilities Section */}
+          <div className="mt-4 border-t border-gray-100 pt-4 space-y-3">
+            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+              Additional Utilities (Garbage, Security, Internet, etc.)
+            </label>
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  placeholder="Utility Name (e.g. Garbage Fee)"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  value={tempUtilityName}
+                  onChange={(e) => setTempUtilityName(e.target.value)}
+                />
+              </div>
+              <div className="w-36">
+                <input
+                  type="number"
+                  placeholder="Fee (KES)"
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  value={tempUtilityFee}
+                  onChange={(e) => setTempUtilityFee(e.target.value ? Number(e.target.value) : '')}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleAddUtility}
+                className="bg-gray-800 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-900 transition"
+              >
+                Add Utility
+              </button>
+            </div>
+
+            {utilities.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {utilities.map((u, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-2 bg-gray-100 border border-gray-200 px-3 py-1.5 rounded-full text-xs font-medium text-gray-800">
+                    {u.name}: KES {u.amount.toLocaleString()}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveUtility(idx)}
+                      className="text-red-500 hover:text-red-700 font-bold ml-1"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -478,9 +553,10 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
                           <th className="p-3.5">Unit Number</th>
                           <th className="p-3.5">Status</th>
                           <th className="p-3.5">Rent (KES)</th>
-                          <th className="p-3.5">Garbage</th>
-                          <th className="p-3.5">Parking</th>
+                          <th className="p-3.5">Deposit</th>
+                          <th className="p-3.5">Use</th>
                           <th className="p-3.5">Water Fee / Meter</th>
+                          <th className="p-3.5">Other Utilities</th>
                           <th className="p-3.5 text-right">Actions</th>
                         </tr>
                       </thead>
@@ -503,13 +579,22 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
                               KES {unit.rent_amount?.toLocaleString()}
                             </td>
                             <td className="p-3.5 text-gray-600">
-                              {unit.garbage_fee === null ? 'N/A' : `KES ${unit.garbage_fee?.toLocaleString()}`}
+                              KES {unit.deposit_fee?.toLocaleString() || '0'}
                             </td>
-                            <td className="p-3.5 text-gray-600">
-                              {unit.parking_fee === null ? 'N/A' : `KES ${unit.parking_fee?.toLocaleString()}`}
-                            </td>
+                            <td className="p-3.5 capitalize text-gray-600">{unit.use_type}</td>
                             <td className="p-3.5 text-gray-600">
                               {unit.water_fee === null ? 'N/A' : `KES ${unit.water_fee?.toLocaleString()}`}
+                            </td>
+                            <td className="p-3.5 text-gray-600">
+                              {unit.utilities && unit.utilities.length > 0 ? (
+                                <div className="text-xs space-y-0.5">
+                                  {unit.utilities.map((u, i) => (
+                                    <div key={i}>{u.name}: KES {u.amount.toLocaleString()}</div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-xs">None</span>
+                              )}
                             </td>
                             <td className="p-3.5 text-right">
                               <button
@@ -534,7 +619,7 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
       {/* EDIT UNIT MODAL */}
       {editingUnit && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-gray-100 pb-3">
               <h3 className="text-base font-bold text-gray-900">
                 Edit Unit {editingUnit.unit_number}
@@ -580,62 +665,33 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
                 />
               </div>
 
-              {/* Garbage Fee Edit */}
               <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                    Garbage Fee
-                  </label>
-                  <label className="text-xs text-gray-500 flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isEditGarbageNA}
-                      onChange={(e) => {
-                        setIsEditGarbageNA(e.target.checked);
-                        if (e.target.checked) setEditGarbageFee('');
-                      }}
-                      className="rounded text-blue-600 focus:ring-blue-500"
-                    />
-                    N/A
-                  </label>
-                </div>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Security Deposit (KES) *
+                </label>
                 <input
                   type="number"
-                  disabled={isEditGarbageNA}
-                  placeholder={isEditGarbageNA ? 'N/A' : '0'}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition disabled:bg-gray-100 disabled:text-gray-400"
-                  value={isEditGarbageNA ? '' : editGarbageFee}
-                  onChange={(e) => setEditGarbageFee(e.target.value ? Number(e.target.value) : 0)}
+                  min="0"
+                  required
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition"
+                  value={editDepositFee}
+                  onChange={(e) => setEditDepositFee(e.target.value ? Number(e.target.value) : '')}
                 />
               </div>
 
-              {/* Parking Fee Edit */}
               <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
-                    Parking Fee
-                  </label>
-                  <label className="text-xs text-gray-500 flex items-center gap-1 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={isEditParkingNA}
-                      onChange={(e) => {
-                        setIsEditParkingNA(e.target.checked);
-                        if (e.target.checked) setEditParkingFee('');
-                      }}
-                      className="rounded text-blue-600 focus:ring-blue-500"
-                    />
-                    N/A
-                  </label>
-                </div>
-                <input
-                  type="number"
-                  disabled={isEditParkingNA}
-                  placeholder={isEditParkingNA ? 'N/A' : '0'}
-                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition disabled:bg-gray-100 disabled:text-gray-400"
-                  value={isEditParkingNA ? '' : editParkingFee}
-                  onChange={(e) => setEditParkingFee(e.target.value ? Number(e.target.value) : 0)}
-                />
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
+                  Unit Use *
+                </label>
+                <select
+                  required
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white transition"
+                  value={editUseType}
+                  onChange={(e) => setEditUseType(e.target.value as 'residential' | 'commercial')}
+                >
+                  <option value="residential">Residential (VAT-Exempt)</option>
+                  <option value="commercial">Commercial (eTIMS Standard VAT)</option>
+                </select>
               </div>
 
               {/* Water Fee Edit */}
@@ -665,6 +721,53 @@ export const AddPropertyTab: React.FC<AddPropertyTabProps> = ({ currentUserId, f
                   value={isEditWaterNA ? '' : editWaterFee}
                   onChange={(e) => setEditWaterFee(e.target.value ? Number(e.target.value) : 0)}
                 />
+              </div>
+
+              {/* Edit Utilities Section */}
+              <div className="border-t border-gray-100 pt-3 space-y-2">
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Additional Utilities
+                </label>
+                <div className="flex gap-2 items-end">
+                  <input
+                    type="text"
+                    placeholder="Utility Name"
+                    className="flex-1 border border-gray-300 rounded-lg p-2.5 text-sm outline-none"
+                    value={editTempName}
+                    onChange={(e) => setEditTempName(e.target.value)}
+                  />
+                  <input
+                    type="number"
+                    placeholder="Fee (KES)"
+                    className="w-28 border border-gray-300 rounded-lg p-2.5 text-sm outline-none"
+                    value={editTempFee}
+                    onChange={(e) => setEditTempFee(e.target.value ? Number(e.target.value) : '')}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddEditUtility}
+                    className="bg-gray-800 text-white px-3.5 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-900 transition"
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {editUtilities.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {editUtilities.map((u, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1.5 bg-gray-100 border border-gray-200 px-3 py-1 rounded-full text-xs font-medium">
+                        {u.name}: KES {u.amount.toLocaleString()}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEditUtility(idx)}
+                          className="text-red-500 font-bold ml-1"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">

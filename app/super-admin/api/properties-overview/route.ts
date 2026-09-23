@@ -1,27 +1,6 @@
-// app/marketer/api/properties-overview/route.ts
-
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient, getSupabaseAdmin } from '@/lib/supabaseServer';
 
-/**
- * Helper to initialize Supabase client authenticated with the Bearer token passed in headers
- */
-function getAuthenticatedSupabaseClient(req: NextRequest) {
-  const authHeader = req.headers.get('authorization');
-  const token = authHeader?.replace('Bearer ', '');
-
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      },
-    }
-  );
-}
-
-/** Helper to generate a clean slug code for utility types */
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -31,26 +10,30 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-// ==========================================
-// 1. GET: FETCH ALL PROPERTIES, UNITS & UTILITIES
-// ==========================================
+// ==================== GET: Fetch Properties for Selected Client ====================
 export async function GET(req: NextRequest) {
   try {
-    const supabase = getAuthenticatedSupabaseClient(req);
-
-    // Authenticate user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized user session.' }, { status: 401 });
+    const authClient = await createServerSupabaseClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
     }
 
-    // Query properties with nested units
-    const { data: properties, error: dbError } = await supabase
+    const url = new URL(req.url);
+    const clientId = url.searchParams.get('clientId');
+    if (!clientId) {
+      return NextResponse.json({ properties: [] }, { status: 200 });
+    }
+
+    const db = process.env.SUPABASE_SERVICE_ROLE_KEY ? getSupabaseAdmin() : authClient;
+
+    const { data: properties, error } = await db
       .from('properties')
       .select(`
         id,
         name,
         location,
+        user_id,
         units (
           id,
           property_id,
@@ -61,38 +44,36 @@ export async function GET(req: NextRequest) {
           vat_treatment,
           vat_rate,
           water_fee,
-          is_occupied
+          status
         )
       `)
+      .eq('user_id', clientId)
       .order('name', { ascending: true });
 
-    if (dbError) {
-      return NextResponse.json({ error: dbError.message }, { status: 500 });
-    }
+    if (error) throw error;
 
-    // For each unit, fetch its associated dynamic utilities
+    // Fetch dynamic utilities for units
     const formattedProperties = await Promise.all(
       (properties || []).map(async (prop) => {
         const unitsWithUtilities = await Promise.all(
           (prop.units || []).map(async (unit: any) => {
-            const { data: charges } = await supabase
+            const { data: charges } = await db
               .from('unit_utility_charges')
               .select(`
                 amount,
-                property_utility_types (
-                  name
-                )
+                property_utility_types ( name )
               `)
               .eq('unit_id', unit.id)
               .eq('is_active', true);
 
             const utilities = (charges || []).map((c: any) => ({
-              name: c.property_utility_types?.name || 'Custom Utility',
+              name: c.property_utility_types?.name || 'Utility',
               amount: c.amount || 0,
             }));
 
             return {
               ...unit,
+              is_occupied: unit.status === 'OCCUPIED',
               utilities,
             };
           })
@@ -105,28 +86,25 @@ export async function GET(req: NextRequest) {
       })
     );
 
-    return NextResponse.json({ properties: formattedProperties }, { status: 200 });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ properties: formattedProperties });
+  } catch (err: any) {
+    console.error('Super-admin API GET error:', err);
+    return NextResponse.json({ error: err.message || 'Failed to fetch properties' }, { status: 500 });
   }
 }
 
-// ==========================================
-// 2. POST: CREATE PROPERTY & UNIT WITH UTILITIES
-// ==========================================
+// ==================== POST: Create Property & Unit for Client ====================
 export async function POST(req: NextRequest) {
   try {
-    const supabase = getAuthenticatedSupabaseClient(req);
-
-    // Authenticate user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized user session.' }, { status: 401 });
+    const authClient = await createServerSupabaseClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
     }
 
     const body = await req.json();
     const {
+      clientId,
       propertyName,
       location,
       unitNumber,
@@ -136,68 +114,53 @@ export async function POST(req: NextRequest) {
       vatTreatment,
       vatRate,
       waterFee,
-      utilities, // Array of { name: string, amount: number }
+      utilities,
     } = body;
 
-    if (!propertyName || !unitNumber || rentAmount === undefined) {
-      return NextResponse.json(
-        { error: 'Property Name, Unit Number, and Rent Amount are required fields.' },
-        { status: 400 }
-      );
+    if (!clientId || !propertyName || !unitNumber || rentAmount === undefined) {
+      return NextResponse.json({ error: 'Missing required fields: clientId, propertyName, unitNumber, or rentAmount.' }, { status: 400 });
     }
 
-    // Step A: Check if property already exists by name
-    const { data: existingProperty } = await supabase
+    const db = process.env.SUPABASE_SERVICE_ROLE_KEY ? getSupabaseAdmin() : authClient;
+
+    // 1. Upsert property for the target clientId
+    const { data: prop, error: propErr } = await db
       .from('properties')
-      .select('id')
-      .ilike('name', propertyName.trim())
-      .maybeSingle();
-
-    let propertyId = existingProperty?.id;
-
-    // Step B: If property doesn't exist, create it
-    if (!propertyId) {
-      const { data: newProperty, error: propError } = await supabase
-        .from('properties')
-        .insert({
+      .upsert(
+        {
           name: propertyName.trim(),
-          location: location ? location.trim() : '',
-          created_by: user.id,
-        })
-        .select('id')
-        .single();
+          location: location ? location.trim() : null,
+          user_id: clientId,
+        },
+        { onConflict: 'name,user_id' }
+      )
+      .select('id')
+      .single();
 
-      if (propError) {
-        return NextResponse.json({ error: propError.message }, { status: 500 });
-      }
+    if (propErr || !prop) throw new Error(propErr?.message || 'Failed to save property.');
+    const propertyId = prop.id;
 
-      propertyId = newProperty.id;
-    }
-
-    // Step C: Insert new unit into units table
-    const { data: newUnit, error: unitError } = await supabase
+    // 2. Insert unit
+    const { data: newUnit, error: unitErr } = await db
       .from('units')
       .insert({
         property_id: propertyId,
         unit_number: unitNumber.trim(),
         rent_amount: Number(rentAmount),
-        deposit_fee: depositFee !== null && depositFee !== '' ? Number(depositFee) : null,
+        deposit_fee: depositFee !== '' && depositFee !== null ? Number(depositFee) : null,
         use_type: useType || 'residential',
         vat_treatment: vatTreatment || 'A_EXEMPT',
         vat_rate: vatRate !== undefined ? Number(vatRate) : 0,
         water_fee: waterFee !== null && waterFee !== '' ? Number(waterFee) : null,
-        is_occupied: false,
+        status: 'VACANT',
       })
       .select('id')
       .single();
 
-    if (unitError || !newUnit) {
-      return NextResponse.json({ error: unitError?.message || 'Failed to create unit.' }, { status: 500 });
-    }
-
+    if (unitErr || !newUnit) throw new Error(unitErr?.message || 'Failed to create unit.');
     const unitId = newUnit.id;
 
-    // Step D: Process Dynamic Utilities
+    // 3. Process Dynamic Utilities
     if (Array.isArray(utilities) && utilities.length > 0) {
       for (const util of utilities) {
         if (!util.name || util.amount === undefined) continue;
@@ -206,7 +169,7 @@ export async function POST(req: NextRequest) {
         const utilityCode = slugify(utilityName);
 
         let utilityTypeId: string;
-        const { data: existingUtilType } = await supabase
+        const { data: existingUtilType } = await db
           .from('property_utility_types')
           .select('id')
           .eq('property_id', propertyId)
@@ -216,7 +179,7 @@ export async function POST(req: NextRequest) {
         if (existingUtilType) {
           utilityTypeId = existingUtilType.id;
         } else {
-          const { data: newUtilType, error: utErr } = await supabase
+          const { data: newUtilType, error: utErr } = await db
             .from('property_utility_types')
             .insert({
               property_id: propertyId,
@@ -235,7 +198,7 @@ export async function POST(req: NextRequest) {
           utilityTypeId = newUtilType.id;
         }
 
-        await supabase.from('unit_utility_charges').insert({
+        await db.from('unit_utility_charges').insert({
           unit_id: unitId,
           utility_type_id: utilityTypeId,
           amount: Number(util.amount),
@@ -246,27 +209,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      { success: true, message: 'Property unit and utilities recorded successfully.' },
-      { status: 201 }
-    );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ success: true, message: 'Property and unit saved successfully.' });
+  } catch (err: any) {
+    console.error('Super-admin API POST error:', err);
+    return NextResponse.json({ error: err.message || 'Failed to save property record.' }, { status: 500 });
   }
 }
 
-// ==========================================
-// 3. PUT: UPDATE EXISTING UNIT & UTILITIES
-// ==========================================
+// ==================== PUT: Update Unit & Utilities ====================
 export async function PUT(req: NextRequest) {
   try {
-    const supabase = getAuthenticatedSupabaseClient(req);
-
-    // Authenticate user session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized user session.' }, { status: 401 });
+    const authClient = await createServerSupabaseClient();
+    const { data: { user } } = await authClient.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
     }
 
     const body = await req.json();
@@ -283,32 +239,26 @@ export async function PUT(req: NextRequest) {
     } = body;
 
     if (!unitId || !unitNumber || rentAmount === undefined) {
-      return NextResponse.json(
-        { error: 'Unit ID, Unit Number, and Rent Amount are required for updates.' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
     }
 
-    // 1. Get unit's property_id
-    const { data: unitData, error: uFetchErr } = await supabase
+    const db = process.env.SUPABASE_SERVICE_ROLE_KEY ? getSupabaseAdmin() : authClient;
+
+    const { data: unitData, error: uFetchErr } = await db
       .from('units')
       .select('property_id')
       .eq('id', unitId)
       .single();
 
-    if (uFetchErr || !unitData) {
-      return NextResponse.json({ error: 'Unit not found.' }, { status: 404 });
-    }
-
+    if (uFetchErr || !unitData) throw new Error('Unit not found.');
     const propertyId = unitData.property_id;
 
-    // 2. Update Unit record
-    const { error: updateError } = await supabase
+    const { error: updateErr } = await db
       .from('units')
       .update({
         unit_number: unitNumber.trim(),
         rent_amount: Number(rentAmount),
-        deposit_fee: depositFee !== null && depositFee !== '' ? Number(depositFee) : null,
+        deposit_fee: depositFee !== '' && depositFee !== null ? Number(depositFee) : null,
         use_type: useType || 'residential',
         vat_treatment: vatTreatment || 'A_EXEMPT',
         vat_rate: vatRate !== undefined ? Number(vatRate) : 0,
@@ -317,12 +267,10 @@ export async function PUT(req: NextRequest) {
       })
       .eq('id', unitId);
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
+    if (updateErr) throw new Error(updateErr.message);
 
-    // 3. Refresh Unit Utilities: Deactivate existing charges and re-sync
-    await supabase
+    // Refresh utilities
+    await db
       .from('unit_utility_charges')
       .update({ is_active: false })
       .eq('unit_id', unitId);
@@ -335,7 +283,7 @@ export async function PUT(req: NextRequest) {
         const utilityCode = slugify(utilityName);
 
         let utilityTypeId: string;
-        const { data: existingUtilType } = await supabase
+        const { data: existingUtilType } = await db
           .from('property_utility_types')
           .select('id')
           .eq('property_id', propertyId)
@@ -345,7 +293,7 @@ export async function PUT(req: NextRequest) {
         if (existingUtilType) {
           utilityTypeId = existingUtilType.id;
         } else {
-          const { data: newUtilType, error: utErr } = await supabase
+          const { data: newUtilType, error: utErr } = await db
             .from('property_utility_types')
             .insert({
               property_id: propertyId,
@@ -364,7 +312,7 @@ export async function PUT(req: NextRequest) {
           utilityTypeId = newUtilType.id;
         }
 
-        const { data: existingCharge } = await supabase
+        const { data: existingCharge } = await db
           .from('unit_utility_charges')
           .select('id')
           .eq('unit_id', unitId)
@@ -372,7 +320,7 @@ export async function PUT(req: NextRequest) {
           .maybeSingle();
 
         if (existingCharge) {
-          await supabase
+          await db
             .from('unit_utility_charges')
             .update({
               amount: Number(util.amount),
@@ -383,7 +331,7 @@ export async function PUT(req: NextRequest) {
             })
             .eq('id', existingCharge.id);
         } else {
-          await supabase.from('unit_utility_charges').insert({
+          await db.from('unit_utility_charges').insert({
             unit_id: unitId,
             utility_type_id: utilityTypeId,
             amount: Number(util.amount),
@@ -395,12 +343,9 @@ export async function PUT(req: NextRequest) {
       }
     }
 
-    return NextResponse.json(
-      { success: true, message: 'Unit and utilities updated successfully.' },
-      { status: 200 }
-    );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ success: true, message: 'Unit updated successfully.' });
+  } catch (err: any) {
+    console.error('Super-admin API PUT error:', err);
+    return NextResponse.json({ error: err.message || 'Failed to update unit record.' }, { status: 500 });
   }
 }
