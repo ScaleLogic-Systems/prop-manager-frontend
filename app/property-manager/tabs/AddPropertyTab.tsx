@@ -1,20 +1,24 @@
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { createClient } from "@/lib/supabaseClient";
+
+interface UtilityItem {
+  name: string;
+  amount: number;
+}
 
 interface Unit {
   id: string;
   property_id: string;
   unit_number: string;
   rent_amount: number;
-  deposit_fee: number;
-  use_type: 'residential' | 'commercial' | 'mixed' | 'other';
-  vat_treatment: 'A_EXEMPT' | 'B_STANDARD_16' | 'C_ZERO_RATED' | 'E_NON_VAT';
+  deposit_fee: number | null;
+  use_type: 'residential' | 'commercial';
+  vat_treatment: 'A_EXEMPT' | 'B_STANDARD_16';
   vat_rate: number;
-  garbage_fee: number;
-  parking_fee: number;
-  water_fee: number;
+  water_fee: number | null;
+  utilities: UtilityItem[];
   is_occupied: boolean;
 }
 
@@ -22,7 +26,6 @@ interface Property {
   id: string;
   name: string;
   location: string;
-  water_rate_per_unit: number;
   units: Unit[];
 }
 
@@ -31,59 +34,76 @@ interface AddPropertyTabProps {
 }
 
 export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
-  // Form state
+  // Property Info state
   const [propertyName, setPropertyName] = useState("");
   const [location, setLocation] = useState("");
-  const [waterRate, setWaterRate] = useState<number | "">("");
 
+  // Unit Info state
   const [unitNumber, setUnitNumber] = useState("");
   const [rentAmount, setRentAmount] = useState<number | "">("");
   const [depositFee, setDepositFee] = useState<number | "">("");
-  const [useType, setUseType] = useState<Unit['use_type']>('residential');
-  const [vatTreatment, setVatTreatment] = useState<Unit['vat_treatment']>('A_EXEMPT');
-  const [vatRate, setVatRate] = useState<number | "">(0);
-  const [utilityName, setUtilityName] = useState('');
-  const [utilityFee, setUtilityFee] = useState<number | "">("");
-  const [garbageFee, setGarbageFee] = useState<number | "">(0);
-  const [parkingFee, setParkingFee] = useState<number | "">(0);
-  const [waterFee, setWaterFee] = useState<number | "">(0);
+  const [useType, setUseType] = useState<'residential' | 'commercial'>('residential');
 
-  // Submission state
+  // Water Meter state
+  const [waterFee, setWaterFee] = useState<number | "">(0);
+  const [isWaterNA, setIsWaterNA] = useState(false);
+
+  // Dynamic Utilities State
+  const [utilities, setUtilities] = useState<UtilityItem[]>([]);
+  const [tempUtilityName, setTempUtilityName] = useState("");
+  const [tempUtilityFee, setTempUtilityFee] = useState<number | "">("");
+
+  // Status states
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
 
-  // Overview state
   const [properties, setProperties] = useState<Property[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
-  // Edit modals state
-  const [editingProperty, setEditingProperty] = useState<Property | null>(null);
+  // Edit Modal State
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+  const [editUnitNumber, setEditUnitNumber] = useState("");
+  const [editRentAmount, setEditRentAmount] = useState<number | "">("");
+  const [editDepositFee, setEditDepositFee] = useState<number | "">("");
+  const [editUseType, setEditUseType] = useState<'residential' | 'commercial'>('residential');
+  const [editWaterFee, setEditWaterFee] = useState<number | "">(0);
+  const [isEditWaterNA, setIsEditWaterNA] = useState(false);
+  const [editUtilities, setEditUtilities] = useState<UtilityItem[]>([]);
+  const [editTempName, setEditTempName] = useState("");
+  const [editTempFee, setEditTempFee] = useState<number | "">("");
+
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  const fetchOverview = async () => {
+  const fetchProperties = async () => {
     try {
       setListLoading(true);
       setListError(null);
-      const res = await fetch("/owner/api/properties-overview");
+
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+      }
+
+      const res = await fetch("/owner/api/properties-overview", {
+        cache: "no-store",
+        headers,
+      });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Failed to fetch (Status: ${res.status})`);
+        throw new Error(errData.error || `Failed to fetch (Status ${res.status})`);
       }
 
       const data = await res.json();
       setProperties(data.properties || []);
     } catch (err: any) {
-      console.error("Fetch overview error:", err);
+      console.error("Error fetching properties:", err);
       setListError(err.message || "Failed to load properties.");
     } finally {
       setListLoading(false);
@@ -91,8 +111,30 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
   };
 
   useEffect(() => {
-    fetchOverview();
-  }, []);
+    fetchProperties();
+  }, [currentUserId]);
+
+  const handleAddUtility = () => {
+    if (!tempUtilityName.trim() || tempUtilityFee === "") return;
+    setUtilities([...utilities, { name: tempUtilityName.trim(), amount: Number(tempUtilityFee) }]);
+    setTempUtilityName("");
+    setTempUtilityFee("");
+  };
+
+  const handleRemoveUtility = (index: number) => {
+    setUtilities(utilities.filter((_, i) => i !== index));
+  };
+
+  const handleAddEditUtility = () => {
+    if (!editTempName.trim() || editTempFee === "") return;
+    setEditUtilities([...editUtilities, { name: editTempName.trim(), amount: Number(editTempFee) }]);
+    setEditTempName("");
+    setEditTempFee("");
+  };
+
+  const handleRemoveEditUtility = (index: number) => {
+    setEditUtilities(editUtilities.filter((_, i) => i !== index));
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -100,95 +142,55 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
     setFormError(null);
     setFormSuccess(null);
 
+    // Smart VAT Assignment based on Unit Use (eTIMS compliant)
+    const vatTreatment = useType === 'residential' ? 'A_EXEMPT' : 'B_STANDARD_16';
+    const vatRate = useType === 'residential' ? 0 : 0.16;
+
     try {
-      let userId = currentUserId;
-      if (!userId) {
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) throw new Error("User session invalid.");
-        userId = user.id;
+      const payload = {
+        propertyName: propertyName.trim(),
+        location: location.trim(),
+        unitNumber: unitNumber.trim(),
+        rentAmount: Number(rentAmount) || 0,
+        depositFee: Number(depositFee) || 0,
+        useType,
+        vatTreatment,
+        vatRate,
+        waterFee: isWaterNA ? null : Number(waterFee) || 0,
+        utilities,
+      };
+
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      const cleanPropName = propertyName.trim();
-      let propertyId: string;
+      const res = await fetch("/owner/api/properties-overview", {
+        method: "POST",
+        headers,
+        body: JSON.stringify(payload),
+      });
 
-      const { data: existing, error: checkError } = await supabase
-        .from("properties")
-        .select("id")
-        .ilike("name", cleanPropName);
-
-      if (checkError) throw checkError;
-
-      if (existing && existing.length > 0) {
-        propertyId = existing[0].id;
-      } else {
-        const { data: newProp, error: propError } = await supabase
-          .from("properties")
-          .insert({
-            name: cleanPropName,
-            location: location.trim(),
-            water_rate_per_unit: Number(waterRate) || 0,
-            owner_id: userId,
-          })
-          .select("id")
-          .single();
-
-        if (propError) throw propError;
-        propertyId = newProp.id;
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to save property record.");
       }
 
-      const { data: savedUnit, error: unitError } = await supabase.from("units").insert({
-        property_id: propertyId,
-        unit_number: unitNumber.trim(),
-        rent_amount: Number(rentAmount) || 0,
-        deposit_fee: Number(depositFee) || 0,
-        use_type: useType,
-        vat_treatment: vatTreatment,
-        vat_rate: Number(vatRate) || 0,
-        garbage_fee: Number(garbageFee) || 0,
-        parking_fee: Number(parkingFee) || 0,
-        water_fee: Number(waterFee) || 0,
-        is_occupied: false,
-      }).select("id").single();
-
-      if (unitError) throw unitError;
-
-      if (utilityName.trim() && savedUnit) {
-        const utilityCode = utilityName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
-        const { data: utilityType, error: utilityTypeError } = await supabase
-          .from('property_utility_types')
-          .upsert({
-            property_id: propertyId,
-            name: utilityName.trim(),
-            code: utilityCode,
-            default_amount: Number(utilityFee) || 0,
-            created_by: userId,
-          }, { onConflict: 'property_id,code' })
-          .select('id')
-          .single();
-        if (utilityTypeError) throw utilityTypeError;
-
-        const { error: chargeError } = await supabase.from('unit_utility_charges').upsert({
-          unit_id: savedUnit.id,
-          utility_type_id: utilityType.id,
-          amount: Number(utilityFee) || 0,
-        }, { onConflict: 'unit_id,utility_type_id' });
-        if (chargeError) throw chargeError;
-      }
-
-      setFormSuccess(`Saved property and unit ${unitNumber}`);
+      setFormSuccess(`Successfully saved ${payload.propertyName} - Unit ${payload.unitNumber}`);
       setUnitNumber("");
       setRentAmount("");
       setDepositFee("");
       setUseType('residential');
-      setVatTreatment('A_EXEMPT');
-      setVatRate(0);
-      setUtilityName('');
-      setUtilityFee('');
-      setGarbageFee(0);
-      setParkingFee(0);
       setWaterFee(0);
+      setIsWaterNA(false);
+      setUtilities([]);
 
-      fetchOverview();
+      fetchProperties();
     } catch (err: any) {
       setFormError(err.message || "Failed to save record.");
     } finally {
@@ -196,81 +198,66 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
     }
   };
 
-  const handleUpdateProperty = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!editingProperty) return;
-    setEditSubmitting(true);
+  const handleOpenEditModal = (unit: Unit) => {
+    setEditingUnit(unit);
+    setEditUnitNumber(unit.unit_number);
+    setEditRentAmount(unit.rent_amount ?? "");
+    setEditDepositFee(unit.deposit_fee ?? "");
+    setEditUseType(unit.use_type);
+    setIsEditWaterNA(unit.water_fee === null);
+    setEditWaterFee(unit.water_fee === null ? "" : unit.water_fee);
+    setEditUtilities(unit.utilities || []);
     setEditError(null);
-
-    try {
-      const { error } = await supabase
-        .from("properties")
-        .update({
-          name: editingProperty.name.trim(),
-          location: editingProperty.location.trim(),
-          water_rate_per_unit: Number(editingProperty.water_rate_per_unit) || 0,
-        })
-        .eq("id", editingProperty.id);
-
-      if (error) throw error;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('property_change_audit_logs').insert({
-          property_id: editingProperty.id,
-          actor_profile_id: user.id,
-          actor_name_snapshot: user.user_metadata?.full_name || user.email || user.id,
-          action: 'updated',
-          changed_fields: { name: editingProperty.name, location: editingProperty.location },
-        });
-      }
-      setEditingProperty(null);
-      fetchOverview();
-    } catch (err: any) {
-      setEditError(err.message || "Failed to update property.");
-    } finally {
-      setEditSubmitting(false);
-    }
   };
 
-  const handleUpdateUnit = async (e: FormEvent) => {
+  const handleSaveEdit = async (e: FormEvent) => {
     e.preventDefault();
     if (!editingUnit) return;
+
     setEditSubmitting(true);
     setEditError(null);
 
-    try {
-      const { error } = await supabase
-        .from("units")
-        .update({
-          unit_number: editingUnit.unit_number.trim(),
-          rent_amount: Number(editingUnit.rent_amount) || 0,
-          deposit_fee: Number(editingUnit.deposit_fee) || 0,
-          use_type: editingUnit.use_type,
-          vat_treatment: editingUnit.vat_treatment,
-          vat_rate: Number(editingUnit.vat_rate) || 0,
-          garbage_fee: Number(editingUnit.garbage_fee) || 0,
-          parking_fee: Number(editingUnit.parking_fee) || 0,
-          water_fee: Number(editingUnit.water_fee) || 0,
-          is_occupied: editingUnit.is_occupied,
-        })
-        .eq("id", editingUnit.id);
+    const vatTreatment = editUseType === 'residential' ? 'A_EXEMPT' : 'B_STANDARD_16';
+    const vatRate = editUseType === 'residential' ? 0 : 0.16;
 
-      if (error) throw error;
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        await supabase.from('property_change_audit_logs').insert({
-          unit_id: editingUnit.id,
-          property_id: editingUnit.property_id,
-          actor_profile_id: user.id,
-          actor_name_snapshot: user.user_metadata?.full_name || user.email || user.id,
-          action: 'updated',
-          changed_fields: { unit_number: editingUnit.unit_number, rent_amount: editingUnit.rent_amount, deposit_fee: editingUnit.deposit_fee, use_type: editingUnit.use_type, vat_treatment: editingUnit.vat_treatment },
-        });
+    try {
+      const payload = {
+        unitId: editingUnit.id,
+        unitNumber: editUnitNumber.trim(),
+        rentAmount: Number(editRentAmount) || 0,
+        depositFee: Number(editDepositFee) || 0,
+        useType: editUseType,
+        vatTreatment,
+        vatRate,
+        waterFee: isEditWaterNA ? null : Number(editWaterFee) || 0,
+        utilities: editUtilities,
+      };
+
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (session?.access_token) {
+        headers["Authorization"] = `Bearer ${session.access_token}`;
       }
+
+      const res = await fetch("/owner/api/properties-overview", {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to update unit record.");
+      }
+
       setEditingUnit(null);
-      fetchOverview();
+      fetchProperties();
     } catch (err: any) {
-      setEditError(err.message || "Failed to update unit.");
+      setEditError(err.message || "Failed to save unit updates.");
     } finally {
       setEditSubmitting(false);
     }
@@ -279,22 +266,22 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">Add New Property & Units</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Add New Property & Units</h1>
         <p className="text-gray-600">
-          Configure property names, locations, unit codes/numbers, and fee schedules.
+          Configure property names, locations, unit numbers, water meters, and dynamic utility fees.
         </p>
       </div>
 
-      {/* FORM SECTION */}
       <form onSubmit={handleSubmit} className="border p-6 rounded-lg bg-white shadow-sm space-y-6">
-        {formError && <div className="p-3 bg-red-100 text-red-700 rounded">{formError}</div>}
-        {formSuccess && <div className="p-3 bg-green-100 text-green-700 rounded">{formSuccess}</div>}
+        {formError && <div className="p-3 bg-red-100 text-red-700 rounded text-sm">{formError}</div>}
+        {formSuccess && <div className="p-3 bg-green-100 text-green-700 rounded text-sm">{formSuccess}</div>}
 
+        {/* Property Information */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold border-b pb-2">1. Property Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium">Property Name *</label>
+              <label className="block text-sm font-medium text-gray-700">Property Name *</label>
               <input
                 type="text"
                 required
@@ -305,7 +292,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium">Location</label>
+              <label className="block text-sm font-medium text-gray-700">Location</label>
               <input
                 type="text"
                 className="w-full border rounded p-2 mt-1"
@@ -314,24 +301,15 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                 onChange={(e) => setLocation(e.target.value)}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium">Water Rate / Unit (KES)</label>
-              <input
-                type="number"
-                className="w-full border rounded p-2 mt-1"
-                placeholder="N/A"
-                value={waterRate}
-                onChange={(e) => setWaterRate(e.target.value ? Number(e.target.value) : "")}
-              />
-            </div>
           </div>
         </div>
 
+        {/* Unit Details & Fees */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold border-b pb-2">2. Unit Details & Fees</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium">Unit Name / Number *</label>
+              <label className="block text-sm font-medium text-gray-700">Unit Name / Number *</label>
               <input
                 type="text"
                 required
@@ -341,8 +319,9 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                 onChange={(e) => setUnitNumber(e.target.value)}
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium">Rent Per Unit (KES) *</label>
+              <label className="block text-sm font-medium text-gray-700">Rent Per Unit (KES) *</label>
               <input
                 type="number"
                 required
@@ -351,61 +330,106 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                 onChange={(e) => setRentAmount(e.target.value ? Number(e.target.value) : "")}
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium">Security Deposit (KES) *</label>
-              <input type="number" min="0" required className="w-full border rounded p-2 mt-1" value={depositFee} onChange={(e) => setDepositFee(e.target.value ? Number(e.target.value) : "")} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Unit Use *</label>
-              <select required className="w-full border rounded p-2 mt-1 bg-white" value={useType} onChange={(e) => setUseType(e.target.value as Unit['use_type'])}>
-                <option value="residential">Residential</option><option value="commercial">Commercial</option><option value="mixed">Mixed</option><option value="other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium">VAT Treatment *</label>
-              <select required className="w-full border rounded p-2 mt-1 bg-white" value={vatTreatment} onChange={(e) => setVatTreatment(e.target.value as Unit['vat_treatment'])}>
-                <option value="A_EXEMPT">Exempt</option><option value="B_STANDARD_16">Standard 16%</option><option value="C_ZERO_RATED">Zero-rated</option><option value="E_NON_VAT">Non-VAT</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium">VAT Rate (decimal)</label>
-              <input type="number" min="0" max="1" step="0.01" className="w-full border rounded p-2 mt-1" value={vatRate} onChange={(e) => setVatRate(e.target.value ? Number(e.target.value) : 0)} />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Garbage Fee</label>
+              <label className="block text-sm font-medium text-gray-700">Security Deposit (KES) *</label>
               <input
                 type="number"
+                min="0"
+                required
                 className="w-full border rounded p-2 mt-1"
-                value={garbageFee}
-                onChange={(e) => setGarbageFee(e.target.value ? Number(e.target.value) : 0)}
+                value={depositFee}
+                onChange={(e) => setDepositFee(e.target.value ? Number(e.target.value) : "")}
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium">Parking Fee</label>
-              <input
-                type="number"
-                className="w-full border rounded p-2 mt-1"
-                value={parkingFee}
-                onChange={(e) => setParkingFee(e.target.value ? Number(e.target.value) : 0)}
-              />
+              <label className="block text-sm font-medium text-gray-700">Unit Use *</label>
+              <select
+                required
+                className="w-full border rounded p-2 mt-1 bg-white"
+                value={useType}
+                onChange={(e) => setUseType(e.target.value as 'residential' | 'commercial')}
+              >
+                <option value="residential">Residential (VAT-Exempt)</option>
+                <option value="commercial">Commercial (eTIMS Standard VAT)</option>
+              </select>
             </div>
+
+            {/* Water Fee / Meter */}
             <div>
-              <label className="block text-sm font-medium">Water Fee</label>
+              <div className="flex justify-between items-center">
+                <label className="block text-sm font-medium text-gray-700">Water Fee / Meter</label>
+                <label className="text-xs text-gray-600 flex items-center gap-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isWaterNA}
+                    onChange={(e) => {
+                      setIsWaterNA(e.target.checked);
+                      if (e.target.checked) setWaterFee("");
+                    }}
+                  />
+                  N/A
+                </label>
+              </div>
               <input
                 type="number"
-                className="w-full border rounded p-2 mt-1"
-                value={waterFee}
+                disabled={isWaterNA}
+                placeholder={isWaterNA ? "N/A" : "0"}
+                className="w-full border rounded p-2 mt-1 disabled:bg-gray-100 disabled:text-gray-400"
+                value={isWaterNA ? "" : waterFee}
                 onChange={(e) => setWaterFee(e.target.value ? Number(e.target.value) : 0)}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium">Custom Utility Name</label>
-              <input type="text" className="w-full border rounded p-2 mt-1" placeholder="e.g. Security" value={utilityName} onChange={(e) => setUtilityName(e.target.value)} />
+          </div>
+
+          {/* Dynamic Utilities Section */}
+          <div className="mt-4 border-t pt-4 space-y-3">
+            <label className="block text-sm font-medium text-gray-700">Additional Utilities (Garbage, Security, Internet, etc.)</label>
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <input
+                  type="text"
+                  placeholder="Utility Name (e.g. Garbage Fee)"
+                  className="w-full border rounded p-2 text-sm"
+                  value={tempUtilityName}
+                  onChange={(e) => setTempUtilityName(e.target.value)}
+                />
+              </div>
+              <div className="w-36">
+                <input
+                  type="number"
+                  placeholder="Fee (KES)"
+                  className="w-full border rounded p-2 text-sm"
+                  value={tempUtilityFee}
+                  onChange={(e) => setTempUtilityFee(e.target.value ? Number(e.target.value) : "")}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleAddUtility}
+                className="bg-gray-800 text-white px-4 py-2 rounded text-sm hover:bg-gray-900 transition"
+              >
+                Add Utility
+              </button>
             </div>
-            <div>
-              <label className="block text-sm font-medium">Custom Utility Fee (KES)</label>
-              <input type="number" min="0" className="w-full border rounded p-2 mt-1" placeholder="0" value={utilityFee} onChange={(e) => setUtilityFee(e.target.value ? Number(e.target.value) : "")} />
-            </div>
+
+            {utilities.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-2">
+                {utilities.map((u, idx) => (
+                  <span key={idx} className="inline-flex items-center gap-2 bg-gray-100 border px-3 py-1 rounded-full text-xs font-medium text-gray-800">
+                    {u.name}: KES {u.amount.toLocaleString()}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveUtility(idx)}
+                      className="text-red-500 hover:text-red-700 font-bold ml-1"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -418,17 +442,17 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         </button>
       </form>
 
-      {/* OVERVIEW INVENTORY */}
+      {/* Registered Properties & Units Inventory */}
       <div className="border rounded-lg bg-white shadow-sm space-y-4 p-6">
         <div className="flex justify-between items-center border-b pb-3">
           <div>
-            <h2 className="text-xl font-bold">Registered Properties & Units</h2>
+            <h2 className="text-xl font-bold text-gray-900">Registered Properties & Units</h2>
             <p className="text-sm text-gray-500">
-              Complete inventory of your registered properties, unit codes, and occupancy status.
+              Complete inventory of your registered properties and units.
             </p>
           </div>
           <button
-            onClick={fetchOverview}
+            onClick={fetchProperties}
             className="border px-4 py-2 rounded text-sm hover:bg-gray-50"
           >
             Refresh List
@@ -438,7 +462,11 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         {listLoading ? (
           <p className="text-gray-500">Loading records...</p>
         ) : listError ? (
-          <p className="text-red-500">{listError}</p>
+          <div className="p-4 bg-red-50 text-red-700 rounded-md border border-red-200 text-sm">
+            {listError}
+          </div>
+        ) : properties.length === 0 ? (
+          <p className="text-gray-500 text-sm py-4 text-center">No properties found. Add one using the form above.</p>
         ) : (
           <div className="space-y-6">
             {properties.map((prop) => {
@@ -448,11 +476,10 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
 
               return (
                 <div key={prop.id} className="border rounded-lg overflow-hidden bg-white">
-                  {/* HEADER WITH EDIT PROPERTY BUTTON */}
                   <div className="bg-gray-50 px-4 py-3 border-b flex flex-wrap justify-between items-center gap-2">
                     <div>
                       <h3 className="text-base font-semibold text-gray-900">{prop.name}</h3>
-                      <p className="text-xs text-gray-500">{prop.location}</p>
+                      <p className="text-xs text-gray-500">{prop.location || "No location set"}</p>
                     </div>
                     <div className="flex items-center gap-2 text-xs">
                       <span className="px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 font-medium">
@@ -464,17 +491,9 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                       <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 font-medium">
                         Vacant: {vacantCount}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setEditingProperty(prop)}
-                        className="ml-2 px-3 py-1 bg-gray-900 text-white rounded hover:bg-black font-medium text-xs"
-                      >
-                        Edit Property
-                      </button>
                     </div>
                   </div>
 
-                  {/* UNITS TABLE */}
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm border-collapse">
                       <thead>
@@ -482,9 +501,10 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                           <th className="p-3">Unit Number</th>
                           <th className="p-3">Status</th>
                           <th className="p-3">Rent (KES)</th>
-                          <th className="p-3">Garbage</th>
-                          <th className="p-3">Parking</th>
-                          <th className="p-3">Water</th>
+                          <th className="p-3">Deposit</th>
+                          <th className="p-3">Use</th>
+                          <th className="p-3">Water Fee / Meter</th>
+                          <th className="p-3">Other Utilities</th>
                           <th className="p-3 text-right">Actions</th>
                         </tr>
                       </thead>
@@ -504,16 +524,28 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                               </span>
                             </td>
                             <td className="p-3">KES {unit.rent_amount?.toLocaleString()}</td>
-                            <td className="p-3">KES {unit.garbage_fee?.toLocaleString()}</td>
-                            <td className="p-3">KES {unit.parking_fee?.toLocaleString()}</td>
-                            <td className="p-3">KES {unit.water_fee?.toLocaleString()}</td>
+                            <td className="p-3">KES {unit.deposit_fee?.toLocaleString() || "0"}</td>
+                            <td className="p-3 capitalize">{unit.use_type}</td>
+                            <td className="p-3">
+                              {unit.water_fee === null ? "N/A" : `KES ${unit.water_fee?.toLocaleString()}`}
+                            </td>
+                            <td className="p-3">
+                              {unit.utilities && unit.utilities.length > 0 ? (
+                                <div className="text-xs space-y-0.5">
+                                  {unit.utilities.map((u, i) => (
+                                    <div key={i}>{u.name}: KES {u.amount.toLocaleString()}</div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-gray-400 text-xs">None</span>
+                              )}
+                            </td>
                             <td className="p-3 text-right">
                               <button
-                                type="button"
-                                onClick={() => setEditingUnit(unit)}
-                                className="text-xs bg-blue-600 text-white hover:bg-blue-700 px-3 py-1 rounded font-medium"
+                                onClick={() => handleOpenEditModal(unit)}
+                                className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium px-3 py-1.5 rounded border transition"
                               >
-                                Edit Unit
+                                Edit
                               </button>
                             </td>
                           </tr>
@@ -528,167 +560,159 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         )}
       </div>
 
-      {/* EDIT PROPERTY MODAL */}
-      {editingProperty && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full space-y-4">
-            <h3 className="text-lg font-bold">Edit Property</h3>
-            {editError && <p className="text-sm text-red-600">{editError}</p>}
-            <form onSubmit={handleUpdateProperty} className="space-y-4">
+      {/* EDIT UNIT MODAL */}
+      {editingUnit && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="text-lg font-bold text-gray-900">
+                Edit Unit {editingUnit.unit_number}
+              </h3>
+              <button
+                onClick={() => setEditingUnit(null)}
+                className="text-gray-400 hover:text-gray-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editError && (
+              <div className="p-3 bg-red-100 text-red-700 rounded text-sm">
+                {editError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium">Property Name</label>
+                <label className="block text-sm font-medium text-gray-700">Unit Name / Number *</label>
                 <input
                   type="text"
                   required
                   className="w-full border rounded p-2 mt-1"
-                  value={editingProperty.name}
-                  onChange={(e) =>
-                    setEditingProperty({ ...editingProperty, name: e.target.value })
-                  }
+                  value={editUnitNumber}
+                  onChange={(e) => setEditUnitNumber(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium">Location</label>
-                <input
-                  type="text"
-                  className="w-full border rounded p-2 mt-1"
-                  value={editingProperty.location || ""}
-                  onChange={(e) =>
-                    setEditingProperty({ ...editingProperty, location: e.target.value })
-                  }
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingProperty(null)}
-                  className="px-4 py-2 border rounded text-sm hover:bg-gray-100"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={editSubmitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:bg-gray-400"
-                >
-                  {editSubmitting ? "Saving..." : "Save Changes"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
-      {/* EDIT UNIT MODAL */}
-      {editingUnit && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-lg w-full space-y-4">
-            <h3 className="text-lg font-bold">Edit Unit {editingUnit.unit_number}</h3>
-            {editError && <p className="text-sm text-red-600">{editError}</p>}
-            <form onSubmit={handleUpdateUnit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium">Unit Number</label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Rent Per Unit (KES) *</label>
+                <input
+                  type="number"
+                  required
+                  className="w-full border rounded p-2 mt-1"
+                  value={editRentAmount}
+                  onChange={(e) => setEditRentAmount(e.target.value ? Number(e.target.value) : "")}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Security Deposit (KES) *</label>
+                <input
+                  type="number"
+                  min="0"
+                  required
+                  className="w-full border rounded p-2 mt-1"
+                  value={editDepositFee}
+                  onChange={(e) => setEditDepositFee(e.target.value ? Number(e.target.value) : "")}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Unit Use *</label>
+                <select
+                  required
+                  className="w-full border rounded p-2 mt-1 bg-white"
+                  value={editUseType}
+                  onChange={(e) => setEditUseType(e.target.value as 'residential' | 'commercial')}
+                >
+                  <option value="residential">Residential (VAT-Exempt)</option>
+                  <option value="commercial">Commercial (eTIMS Standard VAT)</option>
+                </select>
+              </div>
+
+              {/* Water Fee Edit */}
+              <div>
+                <div className="flex justify-between items-center">
+                  <label className="block text-sm font-medium text-gray-700">Water Fee / Meter</label>
+                  <label className="text-xs text-gray-600 flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isEditWaterNA}
+                      onChange={(e) => {
+                        setIsEditWaterNA(e.target.checked);
+                        if (e.target.checked) setEditWaterFee("");
+                      }}
+                    />
+                    N/A
+                  </label>
+                </div>
+                <input
+                  type="number"
+                  disabled={isEditWaterNA}
+                  placeholder={isEditWaterNA ? "N/A" : "0"}
+                  className="w-full border rounded p-2 mt-1 disabled:bg-gray-100 disabled:text-gray-400"
+                  value={isEditWaterNA ? "" : editWaterFee}
+                  onChange={(e) => setEditWaterFee(e.target.value ? Number(e.target.value) : 0)}
+                />
+              </div>
+
+              {/* Edit Utilities Section */}
+              <div className="border-t pt-3 space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Additional Utilities</label>
+                <div className="flex gap-2 items-end">
                   <input
                     type="text"
-                    required
-                    className="w-full border rounded p-2 mt-1"
-                    value={editingUnit.unit_number}
-                    onChange={(e) =>
-                      setEditingUnit({ ...editingUnit, unit_number: e.target.value })
-                    }
+                    placeholder="Utility Name"
+                    className="flex-1 border rounded p-2 text-sm"
+                    value={editTempName}
+                    onChange={(e) => setEditTempName(e.target.value)}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Status</label>
-                  <select
-                    className="w-full border rounded p-2 mt-1"
-                    value={editingUnit.is_occupied ? "occupied" : "vacant"}
-                    onChange={(e) =>
-                      setEditingUnit({
-                        ...editingUnit,
-                        is_occupied: e.target.value === "occupied",
-                      })
-                    }
+                  <input
+                    type="number"
+                    placeholder="Fee (KES)"
+                    className="w-28 border rounded p-2 text-sm"
+                    value={editTempFee}
+                    onChange={(e) => setEditTempFee(e.target.value ? Number(e.target.value) : "")}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddEditUtility}
+                    className="bg-gray-800 text-white px-3 py-2 rounded text-sm"
                   >
-                    <option value="vacant">Vacant</option>
-                    <option value="occupied">Occupied</option>
-                  </select>
+                    Add
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium">Rent Amount (KES)</label>
-                  <input
-                    type="number"
-                    required
-                    className="w-full border rounded p-2 mt-1"
-                    value={editingUnit.rent_amount}
-                    onChange={(e) =>
-                      setEditingUnit({ ...editingUnit, rent_amount: Number(e.target.value) })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Security Deposit (KES)</label>
-                  <input type="number" min="0" className="w-full border rounded p-2 mt-1" value={editingUnit.deposit_fee} onChange={(e) => setEditingUnit({ ...editingUnit, deposit_fee: Number(e.target.value) })} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Unit Use</label>
-                  <select className="w-full border rounded p-2 mt-1 bg-white" value={editingUnit.use_type} onChange={(e) => setEditingUnit({ ...editingUnit, use_type: e.target.value as Unit['use_type'] })}>
-                    <option value="residential">Residential</option><option value="commercial">Commercial</option><option value="mixed">Mixed</option><option value="other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">VAT Treatment</label>
-                  <select className="w-full border rounded p-2 mt-1 bg-white" value={editingUnit.vat_treatment} onChange={(e) => setEditingUnit({ ...editingUnit, vat_treatment: e.target.value as Unit['vat_treatment'] })}>
-                    <option value="A_EXEMPT">Exempt</option><option value="B_STANDARD_16">Standard 16%</option><option value="C_ZERO_RATED">Zero-rated</option><option value="E_NON_VAT">Non-VAT</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Garbage Fee (KES)</label>
-                  <input
-                    type="number"
-                    className="w-full border rounded p-2 mt-1"
-                    value={editingUnit.garbage_fee}
-                    onChange={(e) =>
-                      setEditingUnit({ ...editingUnit, garbage_fee: Number(e.target.value) })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Parking Fee (KES)</label>
-                  <input
-                    type="number"
-                    className="w-full border rounded p-2 mt-1"
-                    value={editingUnit.parking_fee}
-                    onChange={(e) =>
-                      setEditingUnit({ ...editingUnit, parking_fee: Number(e.target.value) })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium">Water Fee (KES)</label>
-                  <input
-                    type="number"
-                    className="w-full border rounded p-2 mt-1"
-                    value={editingUnit.water_fee}
-                    onChange={(e) =>
-                      setEditingUnit({ ...editingUnit, water_fee: Number(e.target.value) })
-                    }
-                  />
-                </div>
+
+                {editUtilities.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {editUtilities.map((u, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1 bg-gray-100 border px-2.5 py-1 rounded-full text-xs font-medium">
+                        {u.name}: KES {u.amount.toLocaleString()}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEditUtility(idx)}
+                          className="text-red-500 font-bold ml-1"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="flex justify-end gap-2 pt-2">
+
+              <div className="flex justify-end gap-3 pt-4 border-t">
                 <button
                   type="button"
                   onClick={() => setEditingUnit(null)}
-                  className="px-4 py-2 border rounded text-sm hover:bg-gray-100"
+                  className="border px-4 py-2 rounded text-sm text-gray-700 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={editSubmitting}
-                  className="px-4 py-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:bg-gray-400"
+                  className="bg-blue-600 text-white px-5 py-2 rounded text-sm hover:bg-blue-700 disabled:bg-gray-400"
                 >
                   {editSubmitting ? "Saving..." : "Save Changes"}
                 </button>
