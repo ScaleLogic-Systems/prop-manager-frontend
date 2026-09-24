@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LayoutDashboard, History, LogOut, Loader2 } from 'lucide-react';
+import { LayoutDashboard, History, Receipt, LogOut, Loader2 } from 'lucide-react';
 import { TenantTab } from '../types';
 
 interface SidebarProps {
@@ -18,6 +18,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
   const navItems: { id: TenantTab; label: string; icon: React.ReactNode }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
     { id: 'payments', label: 'Payment History', icon: <History size={18} /> },
+    { id: 'manual-payment', label: 'Submit M-Pesa Code', icon: <Receipt size={18} /> },
   ];
 
   const handleLogout = async () => {

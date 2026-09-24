@@ -2,16 +2,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Phone, LayoutDashboard, History, Settings } from 'lucide-react';
+import { Phone, LayoutDashboard, History, Receipt, Settings, LogOut, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { TenantTab, TenantProfile } from './types';
 import { DashboardTab } from './tabs/DashboardTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
-import { SettingsTab } from './tabs/SettingsTab'; // 👈 Imported from tenant tabs wrapper
+import { ManualPaymentTab } from './tabs/ManualPaymentTab';
+import { SettingsTab } from './tabs/SettingsTab';
 
 export default function TenantPortalPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TenantTab>('dashboard');
   const [profile, setProfile] = useState<TenantProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [isLoggingOut, setIsLoggingOut] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -23,11 +27,7 @@ export default function TenantPortalPage() {
           const data = await res.json();
           if (data?.profile?.full_name) {
             setProfile(data.profile);
-          } else {
-            console.warn('API returned success but profile full_name was empty:', data);
           }
-        } else {
-          console.error(`Profile fetch HTTP error: ${res.status} ${res.statusText}`);
         }
       } catch (err) {
         console.error('Failed to fetch profile:', err);
@@ -47,14 +47,27 @@ export default function TenantPortalPage() {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+    } catch (err) {
+      console.error('Logout failed:', err);
+      setIsLoggingOut(false);
+    }
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return <DashboardTab />;
       case 'payments':
         return <PaymentsTab />;
+      case 'manual-payment':
+        return <ManualPaymentTab />;
       case 'settings':
-        return <SettingsTab />; // 👈 Rendered via tenant tabs wrapper
+        return <SettingsTab />;
       default:
         return <DashboardTab />;
     }
@@ -90,6 +103,17 @@ export default function TenantPortalPage() {
               Payment History
             </button>
             <button
+              onClick={() => setActiveTab('manual-payment')}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
+                activeTab === 'manual-payment'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <Receipt size={18} />
+              Submit M-Pesa Code
+            </button>
+            <button
               onClick={() => setActiveTab('settings')}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
                 activeTab === 'settings'
@@ -103,8 +127,18 @@ export default function TenantPortalPage() {
           </nav>
         </div>
 
-        <div className="text-xs text-slate-500">
-          © {new Date().getFullYear()} Property Portal
+        <div className="space-y-4 pt-4 border-t border-slate-800">
+          <button
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium text-rose-400 hover:bg-rose-500/10 hover:text-rose-300 transition disabled:opacity-50"
+          >
+            {isLoggingOut ? <Loader2 size={18} className="animate-spin" /> : <LogOut size={18} />}
+            {isLoggingOut ? 'Logging out...' : 'Log Out'}
+          </button>
+          <div className="text-xs text-slate-500 text-center pt-2 border-t border-slate-800/60">
+            © {new Date().getFullYear()} Property Portal
+          </div>
         </div>
       </aside>
 

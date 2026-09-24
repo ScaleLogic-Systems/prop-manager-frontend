@@ -1,5 +1,5 @@
 // app/tenant/types.ts
-export type TenantTab = 'dashboard' | 'payments' | 'settings';
+export type TenantTab = 'dashboard' | 'payments' | 'manual-payment' | 'settings';
 
 export interface TenantProfile {
   full_name: string;
@@ -21,7 +21,7 @@ export interface TenantInvoice {
   title: string;
   amount: number;
   due_date: string;
-  status: 'unpaid' | 'paid' | 'overdue' | 'under_review';
+  status: 'unpaid' | 'paid' | 'overdue' | 'under_review' | 'partial';
   meter_info?: MeterReadingInfo;
 }
 
