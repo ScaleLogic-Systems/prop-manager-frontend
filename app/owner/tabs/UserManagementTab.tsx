@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { UserPlus, Shield, Home, Mail, CheckCircle, Clock, Loader2, AlertCircle, RefreshCw, Briefcase, UserX } from 'lucide-react';
 import { UserRole, PropertyOption, ManagedUser } from '../types';
 import { RemoveUserModal } from '@/components/modals/RemoveUserModal';
+import { createClient } from '@/lib/supabaseClient';
 
 export const UserManagementTab: React.FC = () => {
   const [availableProperties, setAvailableProperties] = useState<PropertyOption[]>([]);
@@ -31,15 +32,23 @@ export const UserManagementTab: React.FC = () => {
     const errors: string[] = [];
 
     try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const propsRes = await fetch('/owner/api/properties-overview', { 
         cache: 'no-store',
-        credentials: 'include'
+        headers
       });
       if (propsRes.ok) {
         const propsData = await propsRes.json();
         const loadedProps = (propsData.properties || []).map((p: any) => ({
-          id: p.propertyId,
-          name: p.propertyName,
+          id: p.propertyId || p.id,
+          name: p.propertyName || p.name,
           units: Array.isArray(p.units)
             ? p.units.map((u: any) => String(u.unit_number || ''))
             : [],
@@ -51,14 +60,10 @@ export const UserManagementTab: React.FC = () => {
       } else {
         errors.push(`Properties API failed (${propsRes.status})`);
       }
-    } catch (err: any) {
-      errors.push(`Properties network error: ${err.message}`);
-    }
 
-    try {
       const usersRes = await fetch('/owner/api/invite-user', { 
         cache: 'no-store',
-        credentials: 'include'
+        headers
       });
       if (usersRes.ok) {
         const usersData = await usersRes.json();
@@ -67,7 +72,7 @@ export const UserManagementTab: React.FC = () => {
         errors.push(`Users API failed (${usersRes.status})`);
       }
     } catch (err: any) {
-      errors.push(`Users directory network error: ${err.message}`);
+      errors.push(`Network error: ${err.message}`);
     }
 
     if (errors.length > 0) {
@@ -89,10 +94,19 @@ export const UserManagementTab: React.FC = () => {
     setFeedback(null);
 
     try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch('/owner/api/invite-user', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers,
         body: JSON.stringify({
           full_name: fullName,
           email,

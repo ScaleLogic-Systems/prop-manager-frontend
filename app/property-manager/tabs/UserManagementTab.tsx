@@ -1,8 +1,10 @@
+// app/property-manager/tabs/UserManagementTab.tsx
 'use client';
 
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Shield, Home, Mail, CheckCircle, Clock, Loader2, AlertCircle } from 'lucide-react';
 import { UserRole, PropertyOption, ManagedUser } from '../types';
+import { createClient } from '@/lib/supabaseClient';
 
 export const UserManagementTab: React.FC = () => {
   const [availableProperties, setAvailableProperties] = useState<PropertyOption[]>([]);
@@ -22,9 +24,17 @@ export const UserManagementTab: React.FC = () => {
   const fetchInitialData = async () => {
     try {
       setFetching(true);
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const [propsRes, usersRes] = await Promise.all([
-        fetch('/property-manager/api/properties', { cache: 'no-store' }),
-        fetch('/property-manager/api/users', { cache: 'no-store' }),
+        fetch('/property-manager/api/properties', { cache: 'no-store', headers }),
+        fetch('/property-manager/api/users', { cache: 'no-store', headers }),
       ]);
 
       if (propsRes.ok) {
@@ -59,9 +69,19 @@ export const UserManagementTab: React.FC = () => {
     setFeedback(null);
 
     try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const res = await fetch('/property-manager/api/invite-user', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           full_name: fullName,
           email,
