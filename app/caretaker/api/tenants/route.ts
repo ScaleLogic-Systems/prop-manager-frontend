@@ -47,76 +47,104 @@ export async function GET(request: Request) {
     }
 
     // 2. Get units for these properties
-    const { data: units, error: unitErr } = await supabase
+    const { data: units } = await supabase
       .from('units')
-      .select('id, unit_number, property_id, tenant_id')
+      .select('id, unit_number, property_id')
       .in('property_id', propertyIds);
 
-    if (unitErr) throw unitErr;
-
-    const unitMap = new Map((units || []).map((u: any) => [u.id, u]));
     const unitIds = (units || []).map((u: any) => u.id);
+    const unitMap = new Map((units || []).map((u: any) => [u.id, u]));
 
-    const tenantMap = new Map<string, any>();
+    // 3. Query tenants by property_id OR unit_id with profile & unit joins
+    const tenantMap = new Map();
 
-    // Strategy A: Query tenants table by unit_id
-    if (unitIds.length > 0) {
-      const { data: tenantsByUnit } = await supabase
-        .from('tenants')
-        .select('id, full_name, tenant_name, email, phone, unit_id, property_id')
-        .in('unit_id', unitIds);
-
-      (tenantsByUnit || []).forEach((t: any) => {
-        const unit = unitMap.get(t.unit_id);
-        tenantMap.set(t.id, {
-          id: t.id,
-          tenant_name: t.full_name || t.tenant_name || 'Unknown Tenant',
-          email: t.email || '',
-          phone: t.phone || '',
-          unit_id: t.unit_id,
-          unit_number: unit?.unit_number || 'N/A',
-          property_id: unit?.property_id || t.property_id || propertyIds[0],
-          property_name: propertyMap.get(unit?.property_id || t.property_id) || '',
-        });
-      });
-    }
-
-    // Strategy B: Query tenants table directly by property_id
     const { data: tenantsByProp } = await supabase
       .from('tenants')
-      .select('id, full_name, tenant_name, email, phone, unit_id, property_id')
+      .select(`
+        id,
+        property_id,
+        unit_id,
+        profile_id,
+        profiles (
+          id,
+          full_name,
+          email,
+          phone
+        ),
+        units (
+          id,
+          unit_number
+        ),
+        properties (
+          id,
+          name
+        )
+      `)
       .in('property_id', propertyIds);
 
     (tenantsByProp || []).forEach((t: any) => {
-      if (!tenantMap.has(t.id)) {
-        const unit = t.unit_id ? unitMap.get(t.unit_id) : null;
+      if (t && t.id) {
+        const profile = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles || {};
+        const unit = Array.isArray(t.units) ? t.units[0] : t.units || {};
+        const prop = Array.isArray(t.properties) ? t.properties[0] : t.properties || {};
+        const resolvedPropId = t.property_id || unitMap.get(t.unit_id)?.property_id || propertyIds[0];
+
         tenantMap.set(t.id, {
           id: t.id,
-          tenant_name: t.full_name || t.tenant_name || 'Unknown Tenant',
-          email: t.email || '',
-          phone: t.phone || '',
-          unit_id: t.unit_id || unit?.id || '',
-          unit_number: unit?.unit_number || 'N/A',
-          property_id: t.property_id || unit?.property_id || propertyIds[0],
-          property_name: propertyMap.get(t.property_id || unit?.property_id) || '',
+          tenant_name: profile.full_name || profile.name || 'Tenant',
+          email: profile.email || '',
+          phone: profile.phone || '',
+          unit_id: t.unit_id || '',
+          unit_number: unit.unit_number || unitMap.get(t.unit_id)?.unit_number || 'N/A',
+          property_id: resolvedPropId,
+          property_name: prop.name || propertyMap.get(resolvedPropId) || 'Property',
         });
       }
     });
 
-    // Strategy C: Absolute Fallback if no tenants matched via foreign keys yet
-    if (tenantMap.size === 0) {
-      const { data: allTenants } = await supabase.from('tenants').select('*');
-      (allTenants || []).forEach((t: any) => {
-        tenantMap.set(t.id, {
-          id: t.id,
-          tenant_name: t.full_name || t.tenant_name || 'Unknown Tenant',
-          email: t.email || '',
-          phone: t.phone || '',
-          unit_id: t.unit_id || '',
-          unit_number: 'N/A',
-          property_id: propertyIds[0],
-          property_name: propertyMap.get(propertyIds[0]) || '',
-        });
+    if (unitIds.length > 0) {
+      const { data: tenantsByUnit } = await supabase
+        .from('tenants')
+        .select(`
+          id,
+          property_id,
+          unit_id,
+          profile_id,
+          profiles (
+            id,
+            full_name,
+            email,
+            phone
+          ),
+          units (
+            id,
+            unit_number
+          ),
+          properties (
+            id,
+            name
+          )
+        `)
+        .in('unit_id', unitIds);
+
+      (tenantsByUnit || []).forEach((t: any) => {
+        if (t && t.id && !tenantMap.has(t.id)) {
+          const profile = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles || {};
+          const unit = Array.isArray(t.units) ? t.units[0] : t.units || {};
+          const prop = Array.isArray(t.properties) ? t.properties[0] : t.properties || {};
+          const resolvedPropId = t.property_id || unitMap.get(t.unit_id)?.property_id || propertyIds[0];
+
+          tenantMap.set(t.id, {
+            id: t.id,
+            tenant_name: profile.full_name || profile.name || 'Tenant',
+            email: profile.email || '',
+            phone: profile.phone || '',
+            unit_id: t.unit_id || '',
+            unit_number: unit.unit_number || unitMap.get(t.unit_id)?.unit_number || 'N/A',
+            property_id: resolvedPropId,
+            property_name: prop.name || propertyMap.get(resolvedPropId) || 'Property',
+          });
+        }
       });
     }
 
