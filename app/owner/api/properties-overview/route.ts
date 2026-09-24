@@ -1,10 +1,11 @@
+// app/owner/api/properties-overview/route.ts
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// Helper to create a Supabase client scoped to the user's request token
-function getSupabaseClient(authHeader: string | null) {
+// Helper to create a Supabase client scoped to the service role for backend operations
+function getSupabaseAdminClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!; // Using service role for robust backend transaction handling
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
   return createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false },
@@ -25,15 +26,42 @@ function slugify(text: string): string {
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('Authorization');
-    const supabase = getSupabaseClient(authHeader);
+    const token = authHeader?.replace('Bearer ', '');
 
-    // Fetch properties with units
-    const { data: properties, error: propError } = await supabase
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Missing auth token.' }, { status: 401 });
+    }
+
+    const supabase = getSupabaseAdminClient();
+
+    // 1. Verify user session from token
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized: Invalid session.' }, { status: 401 });
+    }
+
+    // 2. Fetch user profile role
+    const { data: profile, error: profileErr } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profileErr || !profile) {
+      return NextResponse.json({ success: false, error: 'User profile not found.' }, { status: 403 });
+    }
+
+    const userRole = profile.role;
+
+    // 3. Build query for properties
+    let query = supabase
       .from('properties')
       .select(`
         id,
         name,
         location,
+        owner_id,
+        created_at,
         units (
           id,
           property_id,
@@ -49,11 +77,18 @@ export async function GET(request: Request) {
       `)
       .order('created_at', { ascending: false });
 
+    // STRICT ISOLATION: If the user is an owner, only fetch properties assigned to them
+    if (userRole === 'owner') {
+      query = query.eq('owner_id', user.id);
+    }
+
+    const { data: properties, error: propError } = await query;
+
     if (propError) {
       throw new Error(propError.message);
     }
 
-    // For each unit, fetch its associated dynamic utilities from unit_utility_charges & property_utility_types
+    // 4. For each unit, fetch its associated dynamic utilities
     const formattedProperties = await Promise.all(
       (properties || []).map(async (prop) => {
         const unitsWithUtilities = await Promise.all(
@@ -98,6 +133,19 @@ export async function GET(request: Request) {
 // ==================== POST: Create Property & Unit with Utilities ====================
 export async function POST(request: Request) {
   try {
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 401 });
+    }
+
+    const supabase = getSupabaseAdminClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       propertyName,
@@ -109,7 +157,7 @@ export async function POST(request: Request) {
       vatTreatment,
       vatRate,
       waterFee,
-      utilities, // Array of { name: string, amount: number }
+      utilities,
     } = body;
 
     if (!propertyName || !unitNumber || rentAmount === undefined) {
@@ -119,25 +167,24 @@ export async function POST(request: Request) {
       );
     }
 
-    const authHeader = request.headers.get('Authorization');
-    const supabase = getSupabaseClient(authHeader);
-
-    // 1. Check if property already exists for this name/location, otherwise create it
+    // 1. Check if property already exists by name
     let propertyId: string;
     const { data: existingProp } = await supabase
       .from('properties')
-      .select('id')
+      .select('id, owner_id')
       .ilike('name', propertyName.trim())
       .maybeSingle();
 
     if (existingProp) {
       propertyId = existingProp.id;
     } else {
+      // Create new property assigned to the current user (owner)
       const { data: newProp, error: propErr } = await supabase
         .from('properties')
         .insert({
           name: propertyName.trim(),
           location: location ? location.trim() : null,
+          owner_id: user.id, // <-- Bind property to this owner
         })
         .select('id')
         .single();
@@ -179,7 +226,6 @@ export async function POST(request: Request) {
         const utilityName = util.name.trim();
         const utilityCode = slugify(utilityName);
 
-        // Check if utility type exists for this property
         let utilityTypeId: string;
         const { data: existingUtilType } = await supabase
           .from('property_utility_types')
@@ -205,14 +251,10 @@ export async function POST(request: Request) {
             .select('id')
             .single();
 
-          if (utErr || !newUtilType) {
-            console.error(`Failed to create utility type ${utilityName}:`, utErr);
-            continue;
-          }
+          if (utErr || !newUtilType) continue;
           utilityTypeId = newUtilType.id;
         }
 
-        // Insert unit utility charge
         await supabase.from('unit_utility_charges').insert({
           unit_id: unitId,
           utility_type_id: utilityTypeId,
@@ -237,6 +279,18 @@ export async function POST(request: Request) {
 // ==================== PUT: Update Unit & Utilities ====================
 export async function PUT(request: Request) {
   try {
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 401 });
+    }
+
+    const supabase = getSupabaseAdminClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized.' }, { status: 401 });
+    }
+
     const body = await request.json();
     const {
       unitId,
@@ -257,13 +311,13 @@ export async function PUT(request: Request) {
       );
     }
 
-    const authHeader = request.headers.get('Authorization');
-    const supabase = getSupabaseClient(authHeader);
-
-    // 1. Get unit's property_id
+    // 1. Get unit's property_id and verify ownership
     const { data: unitData, error: uFetchErr } = await supabase
       .from('units')
-      .select('property_id')
+      .select(`
+        property_id,
+        properties ( owner_id )
+      `)
       .eq('id', unitId)
       .single();
 
@@ -292,7 +346,7 @@ export async function PUT(request: Request) {
       throw new Error(`Failed to update unit: ${updateErr.message}`);
     }
 
-    // 3. Refresh Unit Utilities: Deactivate existing charges and re-sync
+    // 3. Refresh Unit Utilities
     await supabase
       .from('unit_utility_charges')
       .update({ is_active: false })
@@ -334,7 +388,6 @@ export async function PUT(request: Request) {
           utilityTypeId = newUtilType.id;
         }
 
-        // Upsert unit utility charge
         const { data: existingCharge } = await supabase
           .from('unit_utility_charges')
           .select('id')

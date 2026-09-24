@@ -2,6 +2,8 @@
 
 import { useEffect, useState, FormEvent } from "react";
 import { createClient } from "@/lib/supabaseClient";
+import { UserPlus } from "lucide-react";
+import SendInviteModal from "../components/SendInviteModal";
 
 interface UtilityItem {
   name: string;
@@ -76,6 +78,9 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
 
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  // Invite Modal State
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   const fetchProperties = async () => {
     try {
@@ -444,19 +449,28 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
 
       {/* Registered Properties & Units Inventory */}
       <div className="border rounded-lg bg-white shadow-sm space-y-4 p-6">
-        <div className="flex justify-between items-center border-b pb-3">
+        <div className="flex flex-wrap justify-between items-center border-b pb-3 gap-3">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Registered Properties & Units</h2>
             <p className="text-sm text-gray-500">
               Complete inventory of your registered properties and units.
             </p>
           </div>
-          <button
-            onClick={fetchProperties}
-            className="border px-4 py-2 rounded text-sm hover:bg-gray-50"
-          >
-            Refresh List
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsInviteModalOpen(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded text-sm font-semibold flex items-center gap-2 transition"
+            >
+              <UserPlus size={16} />
+              Invite Owner / Manager
+            </button>
+            <button
+              onClick={fetchProperties}
+              className="border px-4 py-2 rounded text-sm hover:bg-gray-50 font-medium"
+            >
+              Refresh List
+            </button>
+          </div>
         </div>
 
         {listLoading ? (
@@ -721,6 +735,13 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
           </div>
         </div>
       )}
+
+      {/* SEND INVITE MODAL */}
+      <SendInviteModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        properties={properties.map((p) => ({ id: p.id, name: p.name }))}
+      />
     </div>
   );
 }
