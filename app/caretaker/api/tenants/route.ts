@@ -40,6 +40,8 @@ export async function GET(request: Request) {
     if (propErr) throw propErr;
 
     const propertyIds = (properties || []).map((p: any) => p.id);
+    const propertyMap = new Map((properties || []).map((p: any) => [p.id, p.name]));
+
     if (propertyIds.length === 0) {
       return NextResponse.json({ success: true, tenants: [] });
     }
@@ -47,47 +49,78 @@ export async function GET(request: Request) {
     // 2. Get units for these properties
     const { data: units, error: unitErr } = await supabase
       .from('units')
-      .select('id, unit_number, property_id')
+      .select('id, unit_number, property_id, tenant_id')
       .in('property_id', propertyIds);
 
     if (unitErr) throw unitErr;
 
+    const unitMap = new Map((units || []).map((u: any) => [u.id, u]));
     const unitIds = (units || []).map((u: any) => u.id);
-    if (unitIds.length === 0) {
-      return NextResponse.json({ success: true, tenants: [] });
+
+    const tenantMap = new Map<string, any>();
+
+    // Strategy A: Query tenants table by unit_id
+    if (unitIds.length > 0) {
+      const { data: tenantsByUnit } = await supabase
+        .from('tenants')
+        .select('id, full_name, tenant_name, email, phone, unit_id, property_id')
+        .in('unit_id', unitIds);
+
+      (tenantsByUnit || []).forEach((t: any) => {
+        const unit = unitMap.get(t.unit_id);
+        tenantMap.set(t.id, {
+          id: t.id,
+          tenant_name: t.full_name || t.tenant_name || 'Unknown Tenant',
+          email: t.email || '',
+          phone: t.phone || '',
+          unit_id: t.unit_id,
+          unit_number: unit?.unit_number || 'N/A',
+          property_id: unit?.property_id || t.property_id || propertyIds[0],
+          property_name: propertyMap.get(unit?.property_id || t.property_id) || '',
+        });
+      });
     }
 
-    // 3. Get tenants assigned to these units
-    const { data: tenants, error: tenantErr } = await supabase
+    // Strategy B: Query tenants table directly by property_id
+    const { data: tenantsByProp } = await supabase
       .from('tenants')
-      .select(`
-        id,
-        full_name,
-        email,
-        phone,
-        unit_id,
-        units (
-          unit_number,
-          property_id,
-          properties ( name )
-        )
-      `)
-      .in('unit_id', unitIds);
+      .select('id, full_name, tenant_name, email, phone, unit_id, property_id')
+      .in('property_id', propertyIds);
 
-    if (tenantErr) throw tenantErr;
+    (tenantsByProp || []).forEach((t: any) => {
+      if (!tenantMap.has(t.id)) {
+        const unit = t.unit_id ? unitMap.get(t.unit_id) : null;
+        tenantMap.set(t.id, {
+          id: t.id,
+          tenant_name: t.full_name || t.tenant_name || 'Unknown Tenant',
+          email: t.email || '',
+          phone: t.phone || '',
+          unit_id: t.unit_id || unit?.id || '',
+          unit_number: unit?.unit_number || 'N/A',
+          property_id: t.property_id || unit?.property_id || propertyIds[0],
+          property_name: propertyMap.get(t.property_id || unit?.property_id) || '',
+        });
+      }
+    });
 
-    const formattedTenants = (tenants || []).map((t: any) => ({
-      id: t.id,
-      tenant_name: t.full_name || 'Unknown',
-      email: t.email || '',
-      phone: t.phone || '',
-      unit_id: t.unit_id,
-      unit_number: t.units?.unit_number || 'N/A',
-      property_id: t.units?.property_id || '',
-      property_name: t.units?.properties?.name || '',
-    }));
+    // Strategy C: Absolute Fallback if no tenants matched via foreign keys yet
+    if (tenantMap.size === 0) {
+      const { data: allTenants } = await supabase.from('tenants').select('*');
+      (allTenants || []).forEach((t: any) => {
+        tenantMap.set(t.id, {
+          id: t.id,
+          tenant_name: t.full_name || t.tenant_name || 'Unknown Tenant',
+          email: t.email || '',
+          phone: t.phone || '',
+          unit_id: t.unit_id || '',
+          unit_number: 'N/A',
+          property_id: propertyIds[0],
+          property_name: propertyMap.get(propertyIds[0]) || '',
+        });
+      });
+    }
 
-    return NextResponse.json({ success: true, tenants: formattedTenants });
+    return NextResponse.json({ success: true, tenants: Array.from(tenantMap.values()) });
   } catch (err: any) {
     console.error('Caretaker Tenants API Error:', err);
     return NextResponse.json({ success: false, error: err.message || 'Failed to fetch tenants.' }, { status: 500 });
