@@ -1,3 +1,4 @@
+// app/property-manager/tabs/AddPropertyTab.tsx
 "use client";
 
 import { useEffect, useState, FormEvent } from "react";
@@ -36,26 +37,21 @@ interface AddPropertyTabProps {
 }
 
 export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
-  // Property Info state
   const [propertyName, setPropertyName] = useState("");
   const [location, setLocation] = useState("");
 
-  // Unit Info state
   const [unitNumber, setUnitNumber] = useState("");
   const [rentAmount, setRentAmount] = useState<number | "">("");
   const [depositFee, setDepositFee] = useState<number | "">("");
   const [useType, setUseType] = useState<'residential' | 'commercial'>('residential');
 
-  // Water Meter state
   const [waterFee, setWaterFee] = useState<number | "">(0);
   const [isWaterNA, setIsWaterNA] = useState(false);
 
-  // Dynamic Utilities State
   const [utilities, setUtilities] = useState<UtilityItem[]>([]);
   const [tempUtilityName, setTempUtilityName] = useState("");
   const [tempUtilityFee, setTempUtilityFee] = useState<number | "">("");
 
-  // Status states
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
@@ -64,7 +60,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
-  // Edit Modal State
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [editUnitNumber, setEditUnitNumber] = useState("");
   const [editRentAmount, setEditRentAmount] = useState<number | "">("");
@@ -79,7 +74,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  // Invite Modal State
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
 
   const fetchProperties = async () => {
@@ -95,7 +89,8 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      const res = await fetch("/owner/api/properties-overview", {
+      // Updated to fetch strictly from property-manager endpoint
+      const res = await fetch("/property-manager/api/properties-overview", {
         cache: "no-store",
         headers,
       });
@@ -147,7 +142,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
     setFormError(null);
     setFormSuccess(null);
 
-    // Smart VAT Assignment based on Unit Use (eTIMS compliant)
     const vatTreatment = useType === 'residential' ? 'A_EXEMPT' : 'B_STANDARD_16';
     const vatRate = useType === 'residential' ? 0 : 0.16;
 
@@ -175,7 +169,8 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      const res = await fetch("/owner/api/properties-overview", {
+      // Updated to post to property-manager endpoint
+      const res = await fetch("/property-manager/api/properties-overview", {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -187,6 +182,8 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
       }
 
       setFormSuccess(`Successfully saved ${payload.propertyName} - Unit ${payload.unitNumber}`);
+      setPropertyName("");
+      setLocation("");
       setUnitNumber("");
       setRentAmount("");
       setDepositFee("");
@@ -248,7 +245,8 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      const res = await fetch("/owner/api/properties-overview", {
+      // Updated to put to property-manager endpoint
+      const res = await fetch("/property-manager/api/properties-overview", {
         method: "PUT",
         headers,
         body: JSON.stringify(payload),
@@ -281,7 +279,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         {formError && <div className="p-3 bg-red-100 text-red-700 rounded text-sm">{formError}</div>}
         {formSuccess && <div className="p-3 bg-green-100 text-green-700 rounded text-sm">{formSuccess}</div>}
 
-        {/* Property Information */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold border-b pb-2">1. Property Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -309,7 +306,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
           </div>
         </div>
 
-        {/* Unit Details & Fees */}
         <div className="space-y-4">
           <h2 className="text-lg font-semibold border-b pb-2">2. Unit Details & Fees</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -361,7 +357,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
               </select>
             </div>
 
-            {/* Water Fee / Meter */}
             <div>
               <div className="flex justify-between items-center">
                 <label className="block text-sm font-medium text-gray-700">Water Fee / Meter</label>
@@ -388,9 +383,8 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
             </div>
           </div>
 
-          {/* Dynamic Utilities Section */}
           <div className="mt-4 border-t pt-4 space-y-3">
-            <label className="block text-sm font-medium text-gray-700">Additional Utilities (Garbage, Security, Internet, etc.)</label>
+            <label className="block text-sm font-medium text-gray-700">Additional Utilities</label>
             <div className="flex gap-2 items-end">
               <div className="flex-1">
                 <input
@@ -447,13 +441,12 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         </button>
       </form>
 
-      {/* Registered Properties & Units Inventory */}
       <div className="border rounded-lg bg-white shadow-sm space-y-4 p-6">
         <div className="flex flex-wrap justify-between items-center border-b pb-3 gap-3">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Registered Properties & Units</h2>
+            <h2 className="text-xl font-bold text-gray-900">Registered Managed Properties</h2>
             <p className="text-sm text-gray-500">
-              Complete inventory of your registered properties and units.
+              Inventory of properties assigned to your manager account.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -480,7 +473,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
             {listError}
           </div>
         ) : properties.length === 0 ? (
-          <p className="text-gray-500 text-sm py-4 text-center">No properties found. Add one using the form above.</p>
+          <p className="text-gray-500 text-sm py-4 text-center">No properties assigned to your account yet.</p>
         ) : (
           <div className="space-y-6">
             {properties.map((prop) => {
@@ -517,7 +510,7 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                           <th className="p-3">Rent (KES)</th>
                           <th className="p-3">Deposit</th>
                           <th className="p-3">Use</th>
-                          <th className="p-3">Water Fee / Meter</th>
+                          <th className="p-3">Water Fee</th>
                           <th className="p-3">Other Utilities</th>
                           <th className="p-3 text-right">Actions</th>
                         </tr>
@@ -574,7 +567,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         )}
       </div>
 
-      {/* EDIT UNIT MODAL */}
       {editingUnit && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -644,7 +636,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                 </select>
               </div>
 
-              {/* Water Fee Edit */}
               <div>
                 <div className="flex justify-between items-center">
                   <label className="block text-sm font-medium text-gray-700">Water Fee / Meter</label>
@@ -670,51 +661,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
                 />
               </div>
 
-              {/* Edit Utilities Section */}
-              <div className="border-t pt-3 space-y-2">
-                <label className="block text-sm font-medium text-gray-700">Additional Utilities</label>
-                <div className="flex gap-2 items-end">
-                  <input
-                    type="text"
-                    placeholder="Utility Name"
-                    className="flex-1 border rounded p-2 text-sm"
-                    value={editTempName}
-                    onChange={(e) => setEditTempName(e.target.value)}
-                  />
-                  <input
-                    type="number"
-                    placeholder="Fee (KES)"
-                    className="w-28 border rounded p-2 text-sm"
-                    value={editTempFee}
-                    onChange={(e) => setEditTempFee(e.target.value ? Number(e.target.value) : "")}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddEditUtility}
-                    className="bg-gray-800 text-white px-3 py-2 rounded text-sm"
-                  >
-                    Add
-                  </button>
-                </div>
-
-                {editUtilities.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {editUtilities.map((u, idx) => (
-                      <span key={idx} className="inline-flex items-center gap-1 bg-gray-100 border px-2.5 py-1 rounded-full text-xs font-medium">
-                        {u.name}: KES {u.amount.toLocaleString()}
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveEditUtility(idx)}
-                          className="text-red-500 font-bold ml-1"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <button
                   type="button"
@@ -736,7 +682,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         </div>
       )}
 
-      {/* SEND INVITE MODAL */}
       <SendInviteModal
         isOpen={isInviteModalOpen}
         onClose={() => setIsInviteModalOpen(false)}
