@@ -89,7 +89,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      // Updated to fetch strictly from property-manager endpoint
       const res = await fetch("/property-manager/api/properties-overview", {
         cache: "no-store",
         headers,
@@ -101,7 +100,16 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
       }
 
       const data = await res.json();
-      setProperties(data.properties || []);
+      
+      // Map API response keys (propertyId, propertyName) to component keys (id, name)
+      const mappedProperties: Property[] = (data.properties || []).map((p: any) => ({
+        id: p.propertyId || p.id,
+        name: p.propertyName || p.name || 'Unnamed Property',
+        location: p.location || '',
+        units: p.units || [],
+      }));
+
+      setProperties(mappedProperties);
     } catch (err: any) {
       console.error("Error fetching properties:", err);
       setListError(err.message || "Failed to load properties.");
@@ -169,7 +177,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      // Updated to post to property-manager endpoint
       const res = await fetch("/property-manager/api/properties-overview", {
         method: "POST",
         headers,
@@ -245,7 +252,6 @@ export default function AddPropertyTab({ currentUserId }: AddPropertyTabProps) {
         headers["Authorization"] = `Bearer ${session.access_token}`;
       }
 
-      // Updated to put to property-manager endpoint
       const res = await fetch("/property-manager/api/properties-overview", {
         method: "PUT",
         headers,
