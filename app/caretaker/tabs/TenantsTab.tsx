@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, UserX, Loader2, Mail, Phone } from 'lucide-react';
 import { RemoveUserModal } from '@/components/modals/RemoveUserModal';
+import { createClient } from '@/lib/supabaseClient';
 
 interface TenantRecord {
   id: string;
@@ -24,8 +25,20 @@ export const TenantsTab: React.FC<{ propertyId?: string }> = ({ propertyId }) =>
   const fetchTenants = async () => {
     try {
       setLoading(true);
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const headers: Record<string, string> = {};
+      if (session?.access_token) {
+        headers['Authorization'] = `Bearer ${session.access_token}`;
+      }
+
       const queryParam = propertyId ? `?property_id=${propertyId}` : '';
-      const res = await fetch(`/caretaker/api/tenants${queryParam}`, { cache: 'no-store' });
+      const res = await fetch(`/caretaker/api/tenants${queryParam}`, { 
+        cache: 'no-store',
+        headers 
+      });
+
       if (res.ok) {
         const data = await res.json();
         setTenants(data.tenants || []);
@@ -115,7 +128,6 @@ export const TenantsTab: React.FC<{ propertyId?: string }> = ({ propertyId }) =>
         )}
       </div>
 
-      {/* Confirmation & Removal Modal */}
       {selectedTenant && (
         <RemoveUserModal
           isOpen={!!selectedTenant}
