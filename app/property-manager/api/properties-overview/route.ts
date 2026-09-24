@@ -50,7 +50,7 @@ export async function GET(request: Request) {
         is_occupied,
         invoices (
           id,
-          amount,
+          grand_total,
           status
         )
       )
@@ -69,7 +69,7 @@ export async function GET(request: Request) {
     const { data: properties, error } = await query;
     if (error) throw error;
 
-    // 4. Format and compute financials per property
+    // 4. Format and compute financials per property using grand_total
     const formattedProperties = (properties || []).map((prop: any) => {
       const units = prop.units || [];
       const totalUnits = units.length;
@@ -90,7 +90,7 @@ export async function GET(request: Request) {
         const invoices = unit.invoices || [];
         invoices.forEach((inv: any) => {
           const status = String(inv.status || '').toLowerCase();
-          const amount = Number(inv.amount || 0);
+          const amount = Number(inv.grand_total || 0);
 
           if (status === 'paid') {
             paidInvoices++;
