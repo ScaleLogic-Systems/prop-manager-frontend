@@ -1,3 +1,4 @@
+// app/caretaker/tabs/DashboardTab.tsx
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -10,6 +11,7 @@ import {
   PieChart,
   Loader2
 } from 'lucide-react';
+import { createClient } from '@/lib/supabaseClient';
 
 interface DashboardTabProps {
   propertyId?: string;
@@ -29,29 +31,50 @@ interface Metrics {
   partialAmount: number;
 }
 
-export const DashboardTab: React.FC<DashboardTabProps> = ({ propertyId, propertyName }) => {
+export const DashboardTab: React.FC<DashboardTabProps> = ({ 
+  propertyId: initialPropertyId, 
+  propertyName: initialPropertyName 
+}) => {
+  const [propertyId, setPropertyId] = useState<string | undefined>(initialPropertyId);
+  const [propertyName, setPropertyName] = useState<string | undefined>(initialPropertyName);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchDashboardMetrics = async () => {
+    const fetchDashboardData = async () => {
       try {
         setLoading(true);
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
+
+        const headers: Record<string, string> = {};
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`;
+        }
+
         const queryParam = propertyId ? `?property_id=${propertyId}` : '';
-        const res = await fetch(`/caretaker/api/dashboard-metrics${queryParam}`);
+        const res = await fetch(`/caretaker/api/dashboard-metrics${queryParam}`, {
+          cache: 'no-store',
+          headers
+        });
+
         if (res.ok) {
           const data = await res.json();
           setMetrics(data.metrics);
+          
+          // Automatically set property info returned by the API if props were missing
+          if (data.property_id && !propertyId) setPropertyId(data.property_id);
+          if (data.property_name && !propertyName) setPropertyName(data.property_name);
         }
       } catch (err) {
-        console.error('Error fetching metrics:', err);
+        console.error('Error fetching caretaker metrics:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchDashboardMetrics();
-  }, [propertyId]);
+    fetchDashboardData();
+  }, [propertyId, propertyName]);
 
   if (loading) {
     return (
