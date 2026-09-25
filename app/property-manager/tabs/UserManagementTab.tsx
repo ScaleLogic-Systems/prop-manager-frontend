@@ -75,6 +75,20 @@ export const UserManagementTab: React.FC = () => {
   );
   const availableUnits = currentProperty?.units?.filter((unit: string) => !occupiedUnits.has(unit)) || [];
 
+  // Helper to format invitation date cleanly
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'Today';
+    try {
+      return new Date(dateStr).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -112,12 +126,12 @@ export const UserManagementTab: React.FC = () => {
         msg: `Verification link sent successfully to ${email}. Record saved to database.`,
       });
 
-      // Reset form & reload records
+      // Reset form & immediately reload records
       setFullName('');
       setEmail('');
       setPhone('');
       setSelectedUnit('');
-      fetchInitialData();
+      await fetchInitialData();
     } catch (err: any) {
       setFeedback({ type: 'error', msg: err.message || 'Something went wrong.' });
     } finally {
@@ -342,7 +356,9 @@ export const UserManagementTab: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="p-4 text-gray-500">{usr.invited_at}</td>
+                    <td className="p-4 text-gray-500">
+                      {formatDate(usr.invited_at || (usr as Record<string, any>).created_at)}
+                    </td>
                     <td className="p-4 text-right">
                       <button
                         onClick={() => setSelectedUser(usr)}
