@@ -10,6 +10,8 @@ interface Profile {
   phone?: string | null;
   phone_number?: string | null;
   role: string | null;
+  status: string | null;
+  must_change_password: boolean | null;
   created_at: string;
 }
 
@@ -42,7 +44,9 @@ export interface DirectoryUser {
   role: string;
   property_name: string;
   unit_number: string;
+  status: string;
   created_at: string;
+  invited_at: string;
 }
 
 // Helper to generate a clean, human-readable temporary password (e.g. PM-8A2K9X)
@@ -60,7 +64,6 @@ function generateTempPassword(): string {
 // ==========================================
 export async function GET() {
   try {
-    // Authenticate landlord session via server cookies
     const supabase = await createServerSupabaseClient();
     if (!supabase) {
       console.error('[GET_USERS_DIRECTORY] Failed to create server Supabase client.');
@@ -82,11 +85,10 @@ export async function GET() {
       );
     }
 
-    // Initialize Admin Client (uses SUPABASE_SERVICE_ROLE_KEY)
     const admin = getSupabaseAdmin();
     if (!admin) {
       console.error(
-        '[GET_USERS_DIRECTORY_ERROR] Service Role Admin Client is missing or unconfigured. Verify SUPABASE_SERVICE_ROLE_KEY env variable.'
+        '[GET_USERS_DIRECTORY_ERROR] Service Role Admin Client is missing or unconfigured.'
       );
       return NextResponse.json(
         { error: 'Server configuration error: Service role key missing.' },
@@ -130,7 +132,7 @@ export async function GET() {
 
     const typedTenants: Tenant[] = tenantRecords || [];
 
-    // Collect all unique profile IDs (Tenants + Property Managers + Caretakers + Agents)
+    // Collect all unique profile IDs
     const tenantProfileIds = typedTenants
       .map((t) => t.profile_id)
       .filter((id): id is string => Boolean(id));
@@ -145,10 +147,10 @@ export async function GET() {
       return NextResponse.json({ users: [] }, { status: 200 });
     }
 
-    // Fetch Profiles directly for all resolved IDs
+    // Fetch Profiles directly for all resolved IDs including status & must_change_password
     const { data: profiles, error: profilesError } = await admin
       .from('profiles')
-      .select('id, full_name, email, phone, role, created_at')
+      .select('id, full_name, email, phone, role, status, must_change_password, created_at')
       .in('id', allProfileIds);
 
     if (profilesError) {
@@ -190,6 +192,7 @@ export async function GET() {
     typedTenants.forEach((tenant) => {
       const prof = profileMap.get(tenant.profile_id);
       if (prof) {
+        const isPending = prof.must_change_password === true;
         usersList.push({
           id: prof.id,
           full_name: prof.full_name || 'N/A',
@@ -200,7 +203,9 @@ export async function GET() {
             ? propertyMap.get(tenant.property_id) || 'N/A'
             : 'N/A',
           unit_number: tenant.unit_id ? unitMap.get(tenant.unit_id) || 'N/A' : 'N/A',
-          created_at: tenant.created_at || new Date().toISOString(),
+          status: isPending ? 'pending' : (prof.status || 'active'),
+          created_at: prof.created_at || tenant.created_at || new Date().toISOString(),
+          invited_at: prof.created_at || tenant.created_at || new Date().toISOString(),
         });
       }
     });
@@ -215,6 +220,7 @@ export async function GET() {
             p.caretaker_id === staffId ||
             p.agent_id === staffId
         );
+        const isPending = prof.must_change_password === true;
         usersList.push({
           id: prof.id,
           full_name: prof.full_name || 'N/A',
@@ -223,7 +229,9 @@ export async function GET() {
           role: prof.role || 'property_manager',
           property_name: assignedProp ? assignedProp.name : 'N/A',
           unit_number: 'N/A (Building Level)',
+          status: isPending ? 'pending' : (prof.status || 'active'),
           created_at: prof.created_at || new Date().toISOString(),
+          invited_at: prof.created_at || new Date().toISOString(),
         });
       }
     });
@@ -271,7 +279,6 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
-    // 1. Extract payload keys (supports camelCase and snake_case)
     const fullName = body.fullName || body.full_name;
     const email = body.email;
     const phone = body.phone || body.phone_number || null;
@@ -286,7 +293,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // 2. Normalize role string directly to PostgreSQL enum format (lowercase & snake_case)
     const roleLower = rawRole.toString().trim().toLowerCase();
     let dbRole = 'tenant';
 
@@ -305,7 +311,6 @@ export async function POST(request: Request) {
       dbRole = roleLower.replace(/\s+/g, '_');
     }
 
-    // 3. Resolve Unit UUID from unit display string (e.g. "Unit A-101" -> UUID)
     let resolvedUnitId: string | null = null;
     if (rawUnitInput && rawUnitInput !== 'N/A' && !rawUnitInput.includes('N/A')) {
       const isUuid =
@@ -316,7 +321,6 @@ export async function POST(request: Request) {
       if (isUuid) {
         resolvedUnitId = rawUnitInput;
       } else {
-        // Strip "Unit " prefix if passed (e.g., "Unit A-101" -> "A-101")
         const cleanUnitNum = rawUnitInput.replace(/^Unit\s*/i, '').trim();
 
         const { data: matchedUnit, error: unitSearchError } = await admin
@@ -335,14 +339,13 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Create fully activated Supabase Auth user directly with a temporary password
     const tempPassword = generateTempPassword();
 
     const { data: userData, error: createError } = await admin.auth.admin.createUser(
       {
         email,
         password: tempPassword,
-        email_confirm: true, // Auto-confirm account bypassing email links
+        email_confirm: true,
         user_metadata: {
           full_name: fullName,
           role: dbRole,
@@ -361,13 +364,13 @@ export async function POST(request: Request) {
 
     const newUserId = userData.user.id;
 
-    // 5. Upsert record in public.profiles marking account active and setting must_change_password
     const { error: profileError } = await admin.from('profiles').upsert({
       id: newUserId,
       full_name: fullName,
       email: email,
       phone: phone,
       role: dbRole,
+      status: 'active',
       must_change_password: true,
       created_at: new Date().toISOString(),
     });
@@ -380,7 +383,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // 6. Link user to Tenants table or Property Staff fields
     if (dbRole === 'tenant') {
       const { error: tenantError } = await admin.from('tenants').insert({
         profile_id: newUserId,
@@ -394,6 +396,9 @@ export async function POST(request: Request) {
           { error: `Tenant record error: ${tenantError.message}` },
           { status: 400 }
         );
+      }
+      if (resolvedUnitId) {
+        await admin.from('units').update({ is_occupied: true }).eq('id', resolvedUnitId);
       }
     } else if (dbRole === 'property_manager') {
       const { error: propError } = await admin

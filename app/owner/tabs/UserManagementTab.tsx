@@ -88,6 +88,28 @@ export const UserManagementTab: React.FC = () => {
 
   const currentProperty = availableProperties.find((p) => p.id === selectedPropertyId);
 
+  // Filter out units already occupied in the selected property
+  const occupiedUnits = new Set(
+    users
+      .filter((u) => u.property_id === selectedPropertyId && u.unit_number && u.unit_number !== 'N/A' && !u.unit_number.includes('Building Level'))
+      .map((u) => u.unit_number)
+  );
+  const availableUnits = currentProperty?.units?.filter((unit: string) => !occupiedUnits.has(unit)) || [];
+
+  // Helper to format invitation date cleanly
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return 'Today';
+    try {
+      return new Date(dateStr).toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -136,7 +158,7 @@ export const UserManagementTab: React.FC = () => {
       setEmail('');
       setPhone('');
       setSelectedUnit('N/A');
-      fetchInitialData();
+      await fetchInitialData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Something went wrong while sending the invitation.';
       setFeedback({ type: 'error', msg });
@@ -277,7 +299,7 @@ export const UserManagementTab: React.FC = () => {
                 className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
               >
                 <option value="N/A">N/A (Not Living in Unit / Building Level)</option>
-                {currentProperty?.units?.map((unit) => (
+                {availableUnits.map((unit: string) => (
                   <option key={unit} value={unit}>
                     Unit {unit}
                   </option>
@@ -338,7 +360,7 @@ export const UserManagementTab: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-200 text-sm">
                 {users.map((usr) => (
-                  <tr key={usr.id}>
+                  <tr key={`${usr.id}-${usr.role}`}>
                     <td className="p-4">
                       <div className="font-semibold text-gray-900">{usr.full_name}</div>
                       <div className="text-xs text-gray-500">{usr.email} | {usr.phone}</div>
@@ -375,7 +397,9 @@ export const UserManagementTab: React.FC = () => {
                         </span>
                       )}
                     </td>
-                    <td className="p-4 text-gray-500">{usr.invited_at}</td>
+                    <td className="p-4 text-gray-500">
+                      {formatDate(usr.invited_at || (usr as Record<string, any>).created_at)}
+                    </td>
                     <td className="p-4 text-right">
                       <button
                         onClick={() => setSelectedUser(usr)}

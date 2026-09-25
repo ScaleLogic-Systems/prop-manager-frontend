@@ -1,3 +1,4 @@
+// app/login/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -48,11 +49,20 @@ export default function LoginPage() {
         }
 
         const rawRole = profile?.role || "property_manager";
-        const normalizedRole = rawRole.toLowerCase().trim().replace(/\s+/g, "_");
+        const normalizedRole = rawRole.toLowerCase().trim().replace(/[\s-]+/g, "_");
 
         switch (normalizedRole) {
           case "super_admin":
+          case "superadmin":
             router.push("/super-admin");
+            break;
+
+          case "developer":
+            router.push("/developer");
+            break;
+
+          case "accountant":
+            router.push("/accountant");
             break;
 
           case "property_manager":
@@ -68,12 +78,21 @@ export default function LoginPage() {
             router.push("/caretaker");
             break;
 
+          case "agent":
+            router.push("/agent"); // <-- Successfully routes agents to their portal!
+            break;
+
+          case "marketer":
+          case "sales":
+            router.push("/marketer");
+            break;
+
           case "tenant":
             router.push("/tenant");
             break;
 
           default:
-            router.push("/property-manager");
+            router.push("/tenant");
             break;
         }
       }
@@ -134,7 +153,6 @@ export default function LoginPage() {
               placeholder="••••••••••••"
               className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition"
             />
-            {/* Repositioned Forgot Password link neatly below password input */}
             <div className="flex justify-end mt-1.5">
               <Link href="/auth/forgot-password" className="text-xs text-indigo-400 hover:underline font-medium">
                 Forgot password?
