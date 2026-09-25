@@ -1,12 +1,19 @@
 // app/tenant/types.ts
 export type TenantTab = 'dashboard' | 'payments' | 'manual-payment' | 'settings';
 
+export interface StaffContact {
+  name: string;
+  phone: string;
+  role: string;
+}
+
 export interface TenantProfile {
   full_name: string;
   property_name: string;
   unit_number: string;
-  caretaker_name: string;
-  caretaker_phone: string;
+  caretaker_name?: string;
+  caretaker_phone?: string;
+  contacts?: StaffContact[];
 }
 
 export interface MeterReadingInfo {

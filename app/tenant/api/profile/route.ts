@@ -1,87 +1,131 @@
-import { NextResponse } from 'next/server';
-import { createServerClient } from '@supabase/ssr';
+// app/api/tenant/profile/route.ts
 import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 
-export async function GET() {
+function getSupabaseAdmin() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+}
+
+export async function GET(request: Request) {
   try {
-    const cookieStore = await cookies();
+    const authHeader = request.headers.get('Authorization');
+    const token = authHeader?.replace('Bearer ', '');
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) =>
-                cookieStore.set(name, value, options)
-              );
-            } catch {
-              // Handled in middleware
-            }
-          },
-        },
-      }
-    );
+    const supabase = getSupabaseAdmin();
+    let userId = '';
 
-    // 1. Check Authenticated Auth User
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (token) {
+      const { data: { user } } = await supabase.auth.getUser(token);
+      if (user) userId = user.id;
+    }
 
-    // 2. Use Service Role Admin Client if available to prevent RLS blocks
-    const dbClient = process.env.SUPABASE_SERVICE_ROLE_KEY
-      ? createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!
+    // Fallback if no bearer token passed directly in headers
+    if (!userId) {
+      const cookieHeader = request.headers.get('cookie') || '';
+      // If using cookie session auth
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) userId = user.id;
+    }
+
+    if (!userId) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // 1. Get tenant record linked to this profile
+    const { data: tenantRec, error: tenantErr } = await supabase
+      .from('tenants')
+      .select(`
+        id,
+        property_id,
+        unit_id,
+        properties (
+          id,
+          name,
+          caretaker_id,
+          manager_id
+        ),
+        units (
+          id,
+          unit_number
+        ),
+        profiles (
+          id,
+          full_name,
+          email,
+          phone
         )
-      : supabase;
+      `)
+      .eq('profile_id', userId)
+      .single();
 
-    let targetUserId = user?.id;
+    if (tenantErr || !tenantRec) {
+      // Fallback: check profiles table directly
+      const { data: profileRec } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      return NextResponse.json({
+        success: true,
+        profile: {
+          full_name: profileRec?.full_name || 'Tenant',
+          property_name: 'Not assigned',
+          unit_number: 'N/A',
+          contacts: []
+        }
+      });
+    }
 
-    // If session cookie was missing in Next SSR, fetch the first tenant profile as a safety fallback in development
-    if (!targetUserId) {
-      console.warn('⚠️ No active auth session found in cookies. Fetching active tenant profile.');
-      const { data: fallbackProfile } = await dbClient
+    const prop = Array.isArray(tenantRec.properties) ? tenantRec.properties[0] : tenantRec.properties;
+    const unit = Array.isArray(tenantRec.units) ? tenantRec.units[0] : tenantRec.units;
+    const profile = Array.isArray(tenantRec.profiles) ? tenantRec.profiles[0] : tenantRec.profiles;
+
+    const contacts: any[] = [];
+
+    // 2. Fetch Caretaker(s) assigned to this property
+    if (prop?.caretaker_id) {
+      const { data: caretaker } = await supabase
         .from('profiles')
-        .select('id')
-        .eq('role', 'tenant')
-        .limit(1)
-        .maybeSingle();
+        .select('full_name, phone, role')
+        .eq('id', prop.caretaker_id)
+        .single();
 
-      targetUserId = fallbackProfile?.id;
+      if (caretaker) {
+        contacts.push({
+          name: caretaker.full_name || 'Property Caretaker',
+          phone: caretaker.phone || '',
+          role: 'Caretaker'
+        });
+      }
     }
 
-    if (!targetUserId) {
-      return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
+    // 3. Fetch Manager / Agent assigned to this property
+    if (prop?.manager_id) {
+      const { data: manager } = await supabase
+        .from('profiles')
+        .select('full_name, phone, role')
+        .eq('id', prop.manager_id)
+        .single();
+
+      if (manager) {
+        contacts.push({
+          name: manager.full_name || 'Property Agent / Manager',
+          phone: manager.phone || '',
+          role: 'Property Agent'
+        });
+      }
     }
-
-    // 3. Query profiles table directly
-    const { data: profile, error: profileError } = await dbClient
-      .from('profiles')
-      .select('full_name, email, role')
-      .eq('id', targetUserId)
-      .maybeSingle();
-
-    if (profileError) {
-      console.error('Profile DB query error:', profileError);
-    }
-
-    const nameToReturn = profile?.full_name || 'Tenant User';
 
     return NextResponse.json({
+      success: true,
       profile: {
-        full_name: nameToReturn,
-        property_name: '',
-        unit_number: '',
-        caretaker_name: '',
-        caretaker_phone: ''
+        full_name: profile?.full_name || 'Tenant',
+        property_name: prop?.name || 'Assigned Property',
+        unit_number: unit?.unit_number || 'N/A',
+        contacts: contacts // Array of all caretakers and agents
       }
     });
-  } catch (err) {
-    console.error('Fatal error in profile API:', err);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+
+  } catch (err: any) {
+    console.error('Tenant Profile API Error:', err);
+    return NextResponse.json({ success: false, error: err.message }, { status: 500 });
   }
 }
