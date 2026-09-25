@@ -2,14 +2,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Clock, CheckCircle2, XCircle, CreditCard, User, Home, UserCheck } from 'lucide-react';
+import { Clock, CheckCircle2, XCircle, CreditCard, User, Home, UserCheck, Phone } from 'lucide-react';
 import { PaymentRecord } from '../types';
 
 interface TenantProfile {
   name: string;
+  full_name?: string;
   property_name: string;
   unit_number: string;
   caretaker_name: string;
+  caretaker_phone?: string;
 }
 
 export const PaymentsTab: React.FC = () => {
@@ -21,14 +23,24 @@ export const PaymentsTab: React.FC = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [profileRes, paymentsRes] = await Promise.all([
-          fetch('/api/tenant/profile'),
-          fetch('/api/tenant/payments')
-        ]);
+        // Fallback fetch paths for maximum compatibility across profile routes
+        let profileRes = await fetch('/api/tenant/profile');
+        if (!profileRes.ok) {
+          profileRes = await fetch('/tenant/api/profile');
+        }
+
+        const paymentsRes = await fetch('/api/tenant/payments');
 
         if (profileRes.ok) {
           const profileData = await profileRes.json();
-          setProfile(profileData.profile || null);
+          const p = profileData.profile || profileData || {};
+          setProfile({
+            name: p.full_name || p.name || 'Valued Tenant',
+            property_name: p.property_name || p.property?.name || '',
+            unit_number: p.unit_number || p.unit?.unit_number || '',
+            caretaker_name: p.caretaker_name || p.caretaker?.full_name || p.caretaker?.name || '',
+            caretaker_phone: p.caretaker_phone || p.caretaker?.phone || '',
+          });
         }
 
         if (paymentsRes.ok) {
@@ -82,6 +94,8 @@ export const PaymentsTab: React.FC = () => {
     );
   }
 
+  const displayName = profile?.name || profile?.full_name || 'Valued Tenant';
+
   return (
     <div className="space-y-6">
       {/* 1. HERO SECTION */}
@@ -90,7 +104,7 @@ export const PaymentsTab: React.FC = () => {
           <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Payment Ledger</span>
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5 mt-1">
             <User className="text-blue-600 p-1.5 bg-blue-50 rounded-xl" size={32} />
-            {profile?.name ? `${profile.name} — Transaction History` : 'Transaction History'}
+            {displayName} — Transaction History
           </h2>
           <p className="text-sm text-slate-500 mt-1">
             Review month-after-month records of all submitted and verified transactions.
@@ -112,14 +126,24 @@ export const PaymentsTab: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-3.5 p-4 bg-slate-50 rounded-xl border border-slate-200/60">
-            <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
-              <UserCheck size={20} />
+          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200/60">
+            <div className="flex items-center gap-3.5">
+              <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
+                <UserCheck size={20} />
+              </div>
+              <div>
+                <div className="text-xs text-slate-500 font-medium">Assigned Caretaker</div>
+                <div className="font-bold text-slate-900 mt-0.5">{profile?.caretaker_name || 'Not assigned'}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-xs text-slate-500 font-medium">Assigned Caretaker</div>
-              <div className="font-bold text-slate-900 mt-0.5">{profile?.caretaker_name || 'Not assigned'}</div>
-            </div>
+            {profile?.caretaker_phone && (
+              <a
+                href={`tel:${profile.caretaker_phone}`}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
+              >
+                <Phone size={14} /> Call
+              </a>
+            )}
           </div>
         </div>
       </div>

@@ -18,6 +18,7 @@ import { TenantInvoice, MeterReadingInfo } from '../types';
 
 interface TenantProfile {
   name: string;
+  full_name?: string;
   property_name: string;
   unit_number: string;
   caretaker_name: string;
@@ -35,15 +36,27 @@ export const DashboardTab: React.FC = () => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        const [profileRes, invoiceRes, meterRes] = await Promise.all([
-          fetch('/api/tenant/profile'),
+        // Try fetching from both standard API paths for maximum compatibility
+        let profileRes = await fetch('/api/tenant/profile');
+        if (!profileRes.ok) {
+          profileRes = await fetch('/tenant/api/profile');
+        }
+
+        const [invoiceRes, meterRes] = await Promise.all([
           fetch('/api/tenant/invoices'),
           fetch('/api/tenant/meter-reading')
         ]);
 
         if (profileRes.ok) {
           const profileData = await profileRes.json();
-          setProfile(profileData.profile || null);
+          const p = profileData.profile || profileData || {};
+          setProfile({
+            name: p.full_name || p.name || 'Valued Tenant',
+            property_name: p.property_name || p.property?.name || '',
+            unit_number: p.unit_number || p.unit?.unit_number || '',
+            caretaker_name: p.caretaker_name || p.caretaker?.full_name || p.caretaker?.name || '',
+            caretaker_phone: p.caretaker_phone || p.caretaker?.phone || '',
+          });
         }
 
         if (invoiceRes.ok) {
@@ -102,6 +115,7 @@ export const DashboardTab: React.FC = () => {
 
   const overdueInvoices = invoices.filter((i) => i.status === 'overdue');
   const reviewInvoices = invoices.filter((i) => i.status === 'under_review');
+  const displayName = profile?.name || profile?.full_name || 'Valued Tenant';
 
   return (
     <div className="space-y-8">
@@ -111,7 +125,7 @@ export const DashboardTab: React.FC = () => {
           <span className="text-xs font-bold text-blue-600 uppercase tracking-wider">Tenant Portal</span>
           <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2.5 mt-1">
             <User className="text-blue-600 p-1.5 bg-blue-50 rounded-xl" size={32} />
-            Welcome back, {profile?.name || 'Valued Tenant'} 👋
+            Welcome back, {displayName} 👋
           </h2>
           <p className="text-sm text-slate-500 mt-1">
             Here is a summary of your tenancy, active bills, and water meter consumption.
@@ -121,7 +135,7 @@ export const DashboardTab: React.FC = () => {
         {/* PROPERTY, UNIT, & CARETAKER DETAILS CARDS */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="flex items-center gap-3.5 p-4 bg-slate-50 rounded-xl border border-slate-200/60">
-            <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl">
+            <div className="p-2.5 bg-blue-100 text-blue-700 rounded-xl shrink-0">
               <Home size={20} />
             </div>
             <div>
@@ -134,7 +148,7 @@ export const DashboardTab: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200/60">
+          <div className="flex flex-col justify-between p-4 bg-slate-50 rounded-xl border border-slate-200/60 gap-3">
             <div className="flex items-center gap-3.5">
               <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl shrink-0">
                 <UserCheck size={20} />
@@ -146,19 +160,20 @@ export const DashboardTab: React.FC = () => {
                 </div>
               </div>
             </div>
-            {profile?.caretaker_phone && (
+            {profile?.caretaker_phone ? (
               <a
                 href={`tel:${profile.caretaker_phone}`}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm shrink-0"
-                title={`Call ${profile.caretaker_name || 'Caretaker'}`}
+                className="w-full inline-flex items-center justify-center gap-2 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
               >
-                <Phone size={14} /> Call Caretaker
+                <Phone size={14} /> Call Caretaker ({profile.caretaker_phone})
               </a>
+            ) : (
+              <div className="text-xs text-slate-400 italic">No phone contact listed</div>
             )}
           </div>
 
           <div className="flex items-center gap-3.5 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
-            <div className="p-2.5 bg-blue-600 text-white rounded-xl">
+            <div className="p-2.5 bg-blue-600 text-white rounded-xl shrink-0">
               <CreditCard size={20} />
             </div>
             <div>
@@ -194,38 +209,7 @@ export const DashboardTab: React.FC = () => {
         </div>
       )}
 
-      {/* 3. WATER METER READING OVERVIEW */}
-      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
-        <div className="flex items-center gap-2 text-slate-800 font-bold text-lg border-b border-slate-100 pb-3">
-          <Gauge className="text-blue-600" size={22} />
-          <h3>Water Meter Reading Overview {meterInfo?.billing_month ? `(${meterInfo.billing_month})` : ''}</h3>
-        </div>
-
-        {meterInfo && (meterInfo.current_meter_reading !== undefined || meterInfo.previous_meter_reading !== undefined) ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
-            <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl">
-              <div className="text-xs text-slate-500 font-medium">Previous Meter Reading</div>
-              <div className="text-2xl font-bold text-slate-800 mt-1">{meterInfo.previous_meter_reading ?? '0'}</div>
-            </div>
-
-            <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl">
-              <div className="text-xs text-slate-500 font-medium">Current Meter Reading</div>
-              <div className="text-2xl font-bold text-blue-600 mt-1">{meterInfo.current_meter_reading ?? '0'}</div>
-            </div>
-
-            <div className="p-4 bg-blue-50/60 border border-blue-100 rounded-xl">
-              <div className="text-xs text-blue-600 font-medium">Total Units Consumed</div>
-              <div className="text-2xl font-bold text-blue-950 mt-1">{meterInfo.units_consumed ?? '0'} units</div>
-            </div>
-          </div>
-        ) : (
-          <div className="p-8 text-center text-slate-400 bg-slate-50/50 border border-dashed border-slate-200 rounded-xl text-sm font-medium">
-            No Information to show
-          </div>
-        )}
-      </div>
-
-      {/* 4. RAISED INVOICES & PAYMENT STATUS */}
+      {/* 3. RAISED INVOICES & PAYMENT STATUS */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6 border-b border-slate-200 flex items-center justify-between">
           <div>
@@ -328,6 +312,37 @@ export const DashboardTab: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* 4. WATER METER READING OVERVIEW (MOVED TO BOTTOM) */}
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+        <div className="flex items-center gap-2 text-slate-800 font-bold text-lg border-b border-slate-100 pb-3">
+          <Gauge className="text-blue-600" size={22} />
+          <h3>Water Meter Reading Overview {meterInfo?.billing_month ? `(${meterInfo.billing_month})` : ''}</h3>
+        </div>
+
+        {meterInfo && (meterInfo.current_meter_reading !== undefined || meterInfo.previous_meter_reading !== undefined) ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+            <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl">
+              <div className="text-xs text-slate-500 font-medium">Previous Meter Reading</div>
+              <div className="text-2xl font-bold text-slate-800 mt-1">{meterInfo.previous_meter_reading ?? '0'}</div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border border-slate-200/60 rounded-xl">
+              <div className="text-xs text-slate-500 font-medium">Current Meter Reading</div>
+              <div className="text-2xl font-bold text-blue-600 mt-1">{meterInfo.current_meter_reading ?? '0'}</div>
+            </div>
+
+            <div className="p-4 bg-blue-50/60 border border-blue-100 rounded-xl">
+              <div className="text-xs text-blue-600 font-medium">Total Units Consumed</div>
+              <div className="text-2xl font-bold text-blue-950 mt-1">{meterInfo.units_consumed ?? '0'} units</div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-8 text-center text-slate-400 bg-slate-50/50 border border-dashed border-slate-200 rounded-xl text-sm font-medium">
+            No Information to show
           </div>
         )}
       </div>
