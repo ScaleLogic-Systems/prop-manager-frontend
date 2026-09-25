@@ -27,6 +27,8 @@ function dashboardForRole(rawRole: string): string {
       return '/marketer';
     case 'caretaker':
       return '/caretaker';
+    case 'agent':
+      return '/agent';
     case 'tenant':
     default:
       return '/tenant';

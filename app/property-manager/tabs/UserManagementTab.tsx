@@ -2,14 +2,18 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { UserPlus, Shield, Home, Mail, CheckCircle, Clock, Loader2, AlertCircle } from 'lucide-react';
+import { UserPlus, Shield, Home, Mail, CheckCircle, Clock, Loader2, AlertCircle, UserX } from 'lucide-react';
 import { UserRole, PropertyOption, ManagedUser } from '../types';
+import { RemoveUserModal } from '@/components/modals/RemoveUserModal';
 import { createClient } from '@/lib/supabaseClient';
 
 export const UserManagementTab: React.FC = () => {
   const [availableProperties, setAvailableProperties] = useState<PropertyOption[]>([]);
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [fetching, setFetching] = useState(true);
+
+  // Modal state for user removal
+  const [selectedUser, setSelectedUser] = useState<ManagedUser | null>(null);
 
   // Form states
   const [fullName, setFullName] = useState('');
@@ -62,6 +66,14 @@ export const UserManagementTab: React.FC = () => {
   }, []);
 
   const currentProperty = availableProperties.find((p) => p.id === selectedPropertyId);
+
+  // Filter out units already occupied in the selected property
+  const occupiedUnits = new Set(
+    users
+      .filter((u) => u.property_id === selectedPropertyId && u.unit_number && u.unit_number !== 'N/A' && !u.unit_number.includes('All Building'))
+      .map((u) => u.unit_number)
+  );
+  const availableUnits = currentProperty?.units?.filter((unit: string) => !occupiedUnits.has(unit)) || [];
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -238,7 +250,7 @@ export const UserManagementTab: React.FC = () => {
                   className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                 >
                   <option value="">N/A - Not assigned to a specific unit</option>
-                  {currentProperty?.units?.map((unit) => (
+                  {availableUnits.map((unit: string) => (
                     <option key={unit} value={unit}>
                       {unit}
                     </option>
@@ -282,59 +294,88 @@ export const UserManagementTab: React.FC = () => {
             No registered caretakers, agents, or tenants found in the database.
           </div>
         ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase">
-                <th className="p-4">User</th>
-                <th className="p-4">Role</th>
-                <th className="p-4">Assigned Building</th>
-                <th className="p-4">Unit</th>
-                <th className="p-4">Status</th>
-                <th className="p-4">Invited Date</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 text-sm">
-              {users.map((usr) => (
-                <tr key={usr.id}>
-                  <td className="p-4">
-                    <div className="font-semibold text-gray-900">{usr.full_name}</div>
-                    <div className="text-xs text-gray-500">{usr.email} | {usr.phone}</div>
-                  </td>
-                  <td className="p-4">
-                    {usr.role === 'caretaker' ? (
-                      <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2.5 py-1 rounded-full font-medium">
-                        <Shield size={12} /> Caretaker
-                      </span>
-                    ) : (usr.role as string) === 'agent' ? (
-                      <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-xs px-2.5 py-1 rounded-full font-medium">
-                        <Shield size={12} /> Agent
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-medium">
-                        <Home size={12} /> Tenant
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-gray-700 font-medium">{usr.property_name || 'N/A'}</td>
-                  <td className="p-4 text-gray-600">{usr.unit_number || 'N/A (All Building)'}</td>
-                  <td className="p-4">
-                    {usr.status === 'active' ? (
-                      <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full font-medium">
-                        <CheckCircle size={12} /> Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-medium">
-                        <Clock size={12} /> Pending Password
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-gray-500">{usr.invited_at}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase">
+                  <th className="p-4">User</th>
+                  <th className="p-4">Role</th>
+                  <th className="p-4">Assigned Building</th>
+                  <th className="p-4">Unit</th>
+                  <th className="p-4">Status</th>
+                  <th className="p-4">Invited Date</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200 text-sm">
+                {users.map((usr) => (
+                  <tr key={`${usr.id}-${usr.role}`}>
+                    <td className="p-4">
+                      <div className="font-semibold text-gray-900">{usr.full_name}</div>
+                      <div className="text-xs text-gray-500">{usr.email} | {usr.phone}</div>
+                    </td>
+                    <td className="p-4">
+                      {usr.role === 'caretaker' ? (
+                        <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2.5 py-1 rounded-full font-medium">
+                          <Shield size={12} /> Caretaker
+                        </span>
+                      ) : (usr.role as string) === 'agent' ? (
+                        <span className="inline-flex items-center gap-1 bg-indigo-100 text-indigo-800 text-xs px-2.5 py-1 rounded-full font-medium">
+                          <Shield size={12} /> Agent
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-medium">
+                          <Home size={12} /> Tenant
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 text-gray-700 font-medium">{usr.property_name || 'N/A'}</td>
+                    <td className="p-4 text-gray-600">{usr.unit_number || 'N/A (All Building)'}</td>
+                    <td className="p-4">
+                      {usr.status === 'active' ? (
+                        <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs px-2.5 py-1 rounded-full font-medium">
+                          <CheckCircle size={12} /> Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-medium">
+                          <Clock size={12} /> Pending Password
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-4 text-gray-500">{usr.invited_at}</td>
+                    <td className="p-4 text-right">
+                      <button
+                        onClick={() => setSelectedUser(usr)}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-semibold transition shadow-sm"
+                      >
+                        <UserX size={14} />
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
+
+      {/* Confirmation & Removal Modal */}
+      {selectedUser && (
+        <RemoveUserModal
+          isOpen={!!selectedUser}
+          onClose={() => setSelectedUser(null)}
+          onSuccess={() => {
+            setSelectedUser(null);
+            fetchInitialData();
+          }}
+          targetUserId={selectedUser.id}
+          targetName={selectedUser.full_name}
+          targetRole={selectedUser.role}
+          propertyId={selectedUser.property_id}
+          unitId={(selectedUser as Record<string, any>).unit_id || null}
+        />
+      )}
     </div>
   );
 };
