@@ -1,8 +1,9 @@
+// app/marketer/api/invite-user/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, getSupabaseAdmin } from '@/lib/supabaseServer';
 import { resend, FROM_EMAIL } from '@/lib/resend';
 
-const allowedRoles = ['owner', 'property_manager', 'accountant', 'tenant', 'caretaker'] as const;
+const allowedRoles = ['owner', 'property_manager', 'accountant', 'tenant', 'caretaker', 'agent'] as const;
 type AllowedRole = (typeof allowedRoles)[number];
 
 function generateTempPassword() {

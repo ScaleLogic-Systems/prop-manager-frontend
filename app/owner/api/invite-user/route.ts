@@ -1,3 +1,4 @@
+// app/owner/api/invite-user/route.ts
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, getSupabaseAdmin } from '@/lib/supabaseServer';
 import { resend, FROM_EMAIL } from '@/lib/resend';
@@ -17,6 +18,7 @@ interface Property {
   name: string;
   property_manager_id?: string | null;
   caretaker_id?: string | null;
+  agent_id?: string | null;
 }
 
 interface Tenant {
@@ -97,7 +99,7 @@ export async function GET() {
     // Fetch properties owned by landlord
     const { data: ownerProperties, error: propsError } = await admin
       .from('properties')
-      .select('id, name, property_manager_id, caretaker_id')
+      .select('id, name, property_manager_id, caretaker_id, agent_id')
       .eq('owner_id', ownerId);
 
     if (propsError) {
@@ -128,13 +130,13 @@ export async function GET() {
 
     const typedTenants: Tenant[] = tenantRecords || [];
 
-    // Collect all unique profile IDs (Tenants + Property Managers + Caretakers)
+    // Collect all unique profile IDs (Tenants + Property Managers + Caretakers + Agents)
     const tenantProfileIds = typedTenants
       .map((t) => t.profile_id)
       .filter((id): id is string => Boolean(id));
 
     const staffUserIds = typedProperties
-      .flatMap((p) => [p.property_manager_id, p.caretaker_id])
+      .flatMap((p) => [p.property_manager_id, p.caretaker_id, p.agent_id])
       .filter((id): id is string => Boolean(id));
 
     const allProfileIds = Array.from(new Set([...tenantProfileIds, ...staffUserIds]));
@@ -203,12 +205,15 @@ export async function GET() {
       }
     });
 
-    // Assemble Staff (Managers & Caretakers)
+    // Assemble Staff (Managers, Caretakers & Agents)
     staffUserIds.forEach((staffId) => {
       const prof = profileMap.get(staffId);
       if (prof && !usersList.some((u) => u.id === staffId)) {
         const assignedProp = typedProperties.find(
-          (p) => p.property_manager_id === staffId || p.caretaker_id === staffId
+          (p) =>
+            p.property_manager_id === staffId ||
+            p.caretaker_id === staffId ||
+            p.agent_id === staffId
         );
         usersList.push({
           id: prof.id,
@@ -289,6 +294,8 @@ export async function POST(request: Request) {
       dbRole = 'tenant';
     } else if (roleLower === 'caretaker') {
       dbRole = 'caretaker';
+    } else if (roleLower === 'agent') {
+      dbRole = 'agent';
     } else if (
       roleLower === 'property manager' ||
       roleLower === 'property_manager'
@@ -405,6 +412,15 @@ export async function POST(request: Request) {
 
       if (caretakerError) {
         console.error('[UPDATE_CARETAKER_ERROR]', caretakerError.message);
+      }
+    } else if (dbRole === 'agent') {
+      const { error: agentError } = await admin
+        .from('properties')
+        .update({ agent_id: newUserId })
+        .eq('id', propertyId);
+
+      if (agentError) {
+        console.error('[UPDATE_AGENT_ERROR]', agentError.message);
       }
     }
 

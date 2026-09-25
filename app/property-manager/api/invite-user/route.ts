@@ -1,3 +1,4 @@
+// app/property-manager/api/invite-user/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, getSupabaseAdmin } from '@/lib/supabaseServer';
 import { resend, FROM_EMAIL } from '@/lib/resend';
@@ -11,9 +12,11 @@ export async function POST(request: NextRequest) {
     const authClient = await createServerSupabaseClient();
     const { data: { user } } = await authClient.auth.getUser();
     if (!user) return NextResponse.json({ error: 'Unauthorized access' }, { status: 401 });
+    
     const body = await request.json();
     const { full_name, email, phone, role, property_id, unit_number } = body;
-    if (!full_name || !email || !property_id || !['tenant', 'caretaker'].includes(role)) {
+    
+    if (!full_name || !email || !property_id || !['tenant', 'caretaker', 'agent'].includes(role)) {
       return NextResponse.json({ error: 'Full name, email, role, and property are required.' }, { status: 400 });
     }
 
@@ -29,6 +32,7 @@ export async function POST(request: NextRequest) {
       user_metadata: { full_name, phone, role, must_change_password: true },
     });
     if (createError || !created.user) throw createError || new Error('Failed to create user');
+    
     const profileId = created.user.id;
     const { error: profileError } = await admin.from('profiles').upsert({
       id: profileId,
@@ -44,6 +48,9 @@ export async function POST(request: NextRequest) {
     if (role === 'caretaker') {
       const { error } = await admin.from('properties').update({ caretaker_id: profileId }).eq('id', property_id);
       if (error) throw error;
+    } else if (role === 'agent') {
+      const { error } = await admin.from('properties').update({ agent_id: profileId }).eq('id', property_id);
+      if (error) throw error;
     } else {
       let unitId: string | null = null;
       if (unit_number && unit_number !== 'N/A') {
@@ -54,6 +61,7 @@ export async function POST(request: NextRequest) {
       if (error) throw error;
       if (unitId) await admin.from('units').update({ is_occupied: true }).eq('id', unitId);
     }
+
     const origin = new URL(request.url).origin;
     const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
       type: 'magiclink',

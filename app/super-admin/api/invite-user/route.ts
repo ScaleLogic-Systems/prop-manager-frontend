@@ -1,3 +1,4 @@
+// app/super-admin/api/invite-user/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseClient, getSupabaseAdmin } from '@/lib/supabaseServer';
 import { resend, FROM_EMAIL } from '@/lib/resend';
@@ -11,6 +12,7 @@ const allowedRoles = [
   'owner',
   'caretaker',
   'tenant',
+  'agent',
 ] as const;
 
 type AllowedRole = (typeof allowedRoles)[number];
