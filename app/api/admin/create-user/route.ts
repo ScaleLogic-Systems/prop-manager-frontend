@@ -27,6 +27,18 @@ function generateTemporaryPassword(length = 12): string {
   return password;
 }
 
+const VALID_ROLES = [
+  'super_admin',
+  'developer',
+  'property_manager',
+  'owner',
+  'caretaker',
+  'agent',
+  'accountant',
+  'marketer',
+  'tenant',
+];
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -40,8 +52,22 @@ export async function POST(request: Request) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    // Normalize role matching database schema
-    const normalizedRole = role === 'property_owner' ? 'owner' : role.trim().toLowerCase().replace(/\s+/g, '_');
+    
+    // Normalize and map role variations to match database enum
+    let normalizedRole = role.trim().toLowerCase().replace(/\s+/g, '_');
+    if (normalizedRole === 'property_owner') normalizedRole = 'owner';
+    if (normalizedRole === 'property_agent' || normalizedRole === 'real_estate_agent') normalizedRole = 'agent';
+
+    if (!VALID_ROLES.includes(normalizedRole)) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: `Invalid role specified: "${role}". Allowed roles are: ${VALID_ROLES.join(', ')}` 
+        },
+        { status: 400 }
+      );
+    }
+
     const tempPassword = generateTemporaryPassword();
 
     // 1. Create user in Supabase Auth via Admin API
@@ -68,7 +94,7 @@ export async function POST(request: Request) {
 
     const userId = authData.user.id;
 
-    // 2. Upsert profile record (matching actual DB schema fields)
+    // 2. Upsert profile record matching database schema
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -81,12 +107,12 @@ export async function POST(request: Request) {
       }, { onConflict: 'id' });
 
     if (profileError) {
-      // Rollback auth user if profile creation fails
+      // Rollback auth user if profile record creation fails
       await supabaseAdmin.auth.admin.deleteUser(userId);
       throw new Error(`Failed to create user profile record: ${profileError.message}`);
     }
 
-    // 3. Resolve App URL correctly using your Vercel deployment domain
+    // 3. Resolve App URL correctly using your deployment domain
     const appUrl = 
       process.env.NEXT_PUBLIC_SITE_URL || 
       process.env.NEXT_PUBLIC_APP_URL || 
@@ -94,7 +120,7 @@ export async function POST(request: Request) {
       
     const redirectToUrl = `${appUrl}/auth/change-password`;
 
-    // 4. Generate a secure, authenticated action link via Supabase Admin API
+    // 4. Generate secure recovery/action link via Supabase Admin API
     const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: normalizedEmail,
@@ -109,7 +135,7 @@ export async function POST(request: Request) {
 
     const secureActionLink = linkData?.properties?.action_link || redirectToUrl;
 
-    // 5. Send email via Resend with the secure action link
+    // 5. Send onboarding email via Resend
     if (process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL) {
       const { error: resendError } = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL,
@@ -118,7 +144,7 @@ export async function POST(request: Request) {
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #0f172a; color: #f8fafc; border-radius: 12px;">
             <h2 style="color: #fbbf24; margin-top: 0;">Welcome to PropManager HQ, ${fullName}!</h2>
-            <p>An administrative account has been created for you with the role: <strong style="text-transform: uppercase; color: #38bdf8;">${normalizedRole}</strong>.</p>
+            <p>An administrative account has been created for you with the role: <strong style="text-transform: uppercase; color: #38bdf8;">${normalizedRole.replace('_', ' ')}</strong>.</p>
             
             <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #334155;">
               <p style="margin: 0 0 10px 0; font-size: 14px;"><strong>Temporary Password:</strong></p>
