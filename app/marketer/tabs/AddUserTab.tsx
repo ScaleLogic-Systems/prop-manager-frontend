@@ -14,7 +14,7 @@ export const AddUserTab: React.FC<AddUserTabProps> = ({
 }) => {
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'tenant' | 'property_manager' | 'accountant'>('tenant');
+  const [role, setRole] = useState<'tenant' | 'property_manager' | 'accountant' | 'agent' | 'caretaker'>('tenant');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -97,12 +97,14 @@ export const AddUserTab: React.FC<AddUserTabProps> = ({
           <label className="block font-medium text-gray-700 mb-1">Assign Role</label>
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value as 'tenant' | 'property_manager' | 'accountant')}
+            onChange={(e) => setRole(e.target.value as any)}
             className="w-full px-3 py-2 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500"
           >
             <option value="tenant">Tenant</option>
             <option value="property_manager">Property Manager</option>
             <option value="accountant">Accountant</option>
+            <option value="agent">Agent</option>
+            <option value="caretaker">Caretaker</option>
           </select>
         </div>
 

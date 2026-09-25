@@ -12,6 +12,7 @@ const availableRoles = [
   { value: 'admin', label: 'Admin', badge: 'Admin' },
   { value: 'owner', label: 'Property Owner', badge: 'Client' },
   { value: 'caretaker', label: 'Caretaker', badge: 'Staff' },
+  { value: 'agent', label: 'Agent (Properties & Field Operations)', badge: 'Staff' },
   { value: 'tenant', label: 'Tenant', badge: 'Client' },
   { value: 'marketer', label: 'Marketer', badge: 'Sales' },
 ];

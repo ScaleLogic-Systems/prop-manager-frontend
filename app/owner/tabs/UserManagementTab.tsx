@@ -20,7 +20,7 @@ export const UserManagementTab: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<UserRole>('tenant');
+  const [role, setRole] = useState<UserRole | 'agent'>('tenant');
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
   const [selectedUnit, setSelectedUnit] = useState<string>('N/A');
   const [loading, setLoading] = useState(false);
@@ -155,9 +155,9 @@ export const UserManagementTab: React.FC = () => {
               <UserPlus size={22} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-800">Add & Assign New User</h2>
+              <h2 className="text-xl font-bold text-gray-800">Add &amp; Assign New User</h2>
               <p className="text-sm text-gray-500">
-                Invite a Property Manager, Caretaker, or Tenant. An automated verification link will be emailed to set up their password.
+                Invite a Property Manager, Caretaker, Agent, or Tenant. An automated verification link will be emailed to set up their password.
               </p>
             </div>
           </div>
@@ -237,11 +237,12 @@ export const UserManagementTab: React.FC = () => {
               <label className="block text-sm font-semibold text-gray-700 mb-1">Role Assignment</label>
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
+                onChange={(e) => setRole(e.target.value as any)}
                 className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
               >
                 <option value="tenant">Tenant</option>
                 <option value="caretaker">Caretaker</option>
+                <option value="agent">Agent</option>
                 <option value="property_manager">Property Manager</option>
               </select>
             </div>
@@ -298,7 +299,7 @@ export const UserManagementTab: React.FC = () => {
             ) : (
               <>
                 <Mail size={18} />
-                Send Verification Link & Add User
+                Send Verification Link &amp; Add User
               </>
             )}
           </button>
@@ -309,9 +310,9 @@ export const UserManagementTab: React.FC = () => {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-bold text-gray-800">Managed Users & Roles</h3>
+            <h3 className="text-lg font-bold text-gray-800">Managed Users &amp; Roles</h3>
             <p className="text-sm text-gray-500">
-              Property Managers, Caretakers, and Tenants assigned to your properties in the database.
+              Property Managers, Caretakers, Agents, and Tenants assigned to your properties in the database.
             </p>
           </div>
           {fetching && <Loader2 className="animate-spin text-blue-600" size={18} />}
@@ -350,6 +351,10 @@ export const UserManagementTab: React.FC = () => {
                       ) : usr.role === 'caretaker' ? (
                         <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2.5 py-1 rounded-full font-medium">
                           <Shield size={12} /> Caretaker
+                        </span>
+                      ) : (usr.role as string) === 'agent' ? (
+                        <span className="inline-flex items-center gap-1 bg-teal-100 text-teal-800 text-xs px-2.5 py-1 rounded-full font-medium">
+                          <Shield size={12} /> Agent
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2.5 py-1 rounded-full font-medium">
