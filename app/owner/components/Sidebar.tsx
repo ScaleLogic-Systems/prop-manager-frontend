@@ -1,3 +1,4 @@
+// app/owner/components/Sidebar.tsx
 'use client';
 
 import React from 'react';
@@ -10,6 +11,8 @@ import {
   UserCheck,
   AlertCircle,
   CreditCard,
+  Settings,
+  HelpCircle,
   LogOut,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -37,6 +40,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => 
     { id: 'tenants', label: 'Tenants', icon: UserCheck },
     { id: 'unassigned-payments', label: 'Unassigned Payments', icon: AlertCircle },
     { id: 'subscription', label: 'Subscriptions', icon: CreditCard },
+    { id: 'support', label: 'Support', icon: HelpCircle },
+    { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   return (
