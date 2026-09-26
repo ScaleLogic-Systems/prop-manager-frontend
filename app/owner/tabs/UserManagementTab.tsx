@@ -88,13 +88,18 @@ export const UserManagementTab: React.FC = () => {
 
   const currentProperty = availableProperties.find((p) => p.id === selectedPropertyId);
 
-  // Filter out units already occupied in the selected property
+  // Filter out units already occupied in the selected property (matching property id/name and trimming unit strings)
   const occupiedUnits = new Set(
     users
-      .filter((u) => u.property_id === selectedPropertyId && u.unit_number && u.unit_number !== 'N/A' && !u.unit_number.includes('Building Level'))
-      .map((u) => u.unit_number)
+      .filter((u) => 
+        (u.property_id === selectedPropertyId || u.property_name === currentProperty?.name) && 
+        u.unit_number && 
+        u.unit_number !== 'N/A' && 
+        !u.unit_number.includes('Building Level')
+      )
+      .map((u) => String(u.unit_number).trim().toLowerCase())
   );
-  const availableUnits = currentProperty?.units?.filter((unit: string) => !occupiedUnits.has(unit)) || [];
+  const availableUnits = currentProperty?.units?.filter((unit: string) => !occupiedUnits.has(String(unit).trim().toLowerCase())) || [];
 
   // Helper to format invitation date cleanly
   const formatDate = (dateStr?: string) => {
