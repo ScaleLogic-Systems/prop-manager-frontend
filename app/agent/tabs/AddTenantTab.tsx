@@ -2,139 +2,160 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { UserPlus, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
-import { createClient } from '@/lib/supabaseClient';
+import { UserPlus, Mail, CheckCircle, AlertCircle } from 'lucide-react';
+
+interface Property {
+  id: string;
+  name: string;
+  units?: Array<{ id: string; unit_number: string }>;
+}
+
+interface Unit {
+  id: string;
+  unit_number: string;
+}
 
 export const AddTenantTab: React.FC<{ propertyId?: string }> = ({ propertyId }) => {
-  const [properties, setProperties] = useState<any[]>([]);
-  const [units, setUnits] = useState<any[]>([]);
-  const [selectedProperty, setSelectedProperty] = useState(propertyId || '');
-  const [selectedUnit, setSelectedUnit] = useState('');
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>(propertyId || '');
+  const [selectedUnitId, setSelectedUnitId] = useState<string>('');
+  
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   
   const [loading, setLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [errorMsg, setErrorMsg] = useState('');
+  const [fetchingUnits, setFetchingUnits] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // 1. Fetch agent profile and assigned properties using agent API routes
   useEffect(() => {
-    const fetchScope = async () => {
+    const fetchAgentData = async () => {
       try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        const headers: Record<string, string> = {};
-        if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
-
-        const res = await fetch('/agent/api/profile', { headers });
+        const res = await fetch('/agent/api/profile', { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
-          setProperties(data.properties || []);
-          if (!selectedProperty && data.properties?.length > 0) {
-            setSelectedProperty(data.properties[0].id);
+          if (data?.profile) {
+            const assignedProp = {
+              id: data.profile.assigned_property_id || propertyId || '',
+              name: data.profile.assigned_property_name || 'Assigned Property',
+            };
+            if (assignedProp.id) {
+              setProperties([assignedProp]);
+              if (!selectedPropertyId) {
+                setSelectedPropertyId(assignedProp.id);
+              }
+            }
+          }
+        }
+
+        const tenantsRes = await fetch('/agent/api/tenants', { cache: 'no-store' });
+        if (tenantsRes.ok) {
+          const tenantsData = await tenantsRes.json();
+          if (Array.isArray(tenantsData.properties) && tenantsData.properties.length > 0) {
+            setProperties(tenantsData.properties);
           }
         }
       } catch (err) {
-        console.error('Failed to fetch properties:', err);
+        console.error('Failed to fetch agent properties and profile:', err);
       }
     };
-    fetchScope();
-  }, []);
+    fetchAgentData();
+  }, [propertyId]);
 
+  // 2. Fetch units when property changes using agent tenants API route
   useEffect(() => {
-    if (!selectedProperty) return;
+    if (!selectedPropertyId) return;
     const fetchUnits = async () => {
       try {
-        const supabase = createClient();
-        const { data } = await supabase.from('units').select('id, unit_number').eq('property_id', selectedProperty);
-        setUnits(data || []);
+        setFetchingUnits(true);
+        const res = await fetch(`/agent/api/tenants?property_id=${selectedPropertyId}`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          setUnits(data.units || data.available_units || []);
+        }
       } catch (err) {
         console.error('Failed to fetch units:', err);
+      } finally {
+        setFetchingUnits(false);
       }
     };
     fetchUnits();
-  }, [selectedProperty]);
+  }, [selectedPropertyId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleInviteTenant = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSuccessMsg('');
-    setErrorMsg('');
-
-    if (!fullName || !email || !selectedUnit) {
-      setErrorMsg('Please fill in all required tenant details and select a unit.');
-      return;
-    }
+    setLoading(true);
+    setSuccessMsg(null);
+    setErrorMsg(null);
 
     try {
-      setLoading(true);
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
-
-      const res = await fetch('/api/caretaker/invite-tenant', {
+      const res = await fetch('/agent/api/tenants', {
         method: 'POST',
-        headers,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          full_name: fullName.trim(),
-          email: email.trim(),
-          phone: phone.trim(),
-          property_id: selectedProperty,
-          unit_id: selectedUnit,
+          full_name: fullName,
+          email,
+          phone,
+          property_id: selectedPropertyId,
+          unit_id: selectedUnitId,
         }),
       });
 
-      if (!res.ok) throw new Error('Failed to onboard tenant');
+      const resData = await res.json();
+      if (!res.ok) throw new Error(resData.error || 'Failed to send verification link.');
 
-      setSuccessMsg('Tenant successfully onboarded and assigned to unit!');
+      setSuccessMsg(`Verification link successfully emailed to ${email}`);
       setFullName('');
       setEmail('');
       setPhone('');
-      setSelectedUnit('');
+      setSelectedUnitId('');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to add tenant.');
+      setErrorMsg(err.message || 'Error triggering invite email.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-            <UserPlus size={24} />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Onboard New Tenant</h2>
-            <p className="text-sm text-slate-500">Register and assign a tenant to an available unit.</p>
-          </div>
+    <div className="max-w-3xl bg-white p-8 rounded-xl shadow-sm border border-gray-200">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+          <UserPlus size={22} />
+        </div>
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Add New Tenant</h2>
+          <p className="text-sm text-gray-500">
+            Assign tenants to units and trigger a verification link for account setup.
+          </p>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-        {successMsg && (
-          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-start gap-3 text-emerald-800 text-sm">
-            <CheckCircle2 className="shrink-0 text-emerald-600 mt-0.5" size={18} />
-            <span>{successMsg}</span>
-          </div>
-        )}
+      {successMsg && (
+        <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded-lg text-sm mb-6 flex items-center gap-2">
+          <CheckCircle size={18} /> {successMsg}
+        </div>
+      )}
 
-        {errorMsg && (
-          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-3 text-rose-800 text-sm">
-            <AlertCircle className="shrink-0 text-rose-600 mt-0.5" size={18} />
-            <span>{errorMsg}</span>
-          </div>
-        )}
+      {errorMsg && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-800 rounded-lg text-sm mb-6 flex items-center gap-2">
+          <AlertCircle size={18} /> {errorMsg}
+        </div>
+      )}
 
-        <div className="space-y-4">
+      <form onSubmit={handleInviteTenant} className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Select Property</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Select Property</label>
             <select
-              value={selectedProperty}
-              onChange={(e) => setSelectedProperty(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              required
+              value={selectedPropertyId}
+              onChange={(e) => setSelectedPropertyId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
             >
+              <option value="">-- Select Property --</option>
               {properties.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
@@ -142,63 +163,71 @@ export const AddTenantTab: React.FC<{ propertyId?: string }> = ({ propertyId }) 
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Select Vacant Unit</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Assign Unit</label>
             <select
-              value={selectedUnit}
-              onChange={(e) => setSelectedUnit(e.target.value)}
               required
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              disabled={fetchingUnits || units.length === 0}
+              value={selectedUnitId}
+              onChange={(e) => setSelectedUnitId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white disabled:bg-gray-100"
             >
-              <option value="">Choose unit...</option>
-              {units.map((u) => (
-                <option key={u.id} value={u.id}>Unit {u.unit_number}</option>
+              <option value="">
+                {fetchingUnits ? 'Loading units...' : units.length === 0 ? 'No units found' : '-- Select Unit --'}
+              </option>
+              {units.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  Unit {unit.unit_number}
+                </option>
               ))}
             </select>
           </div>
+        </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Full Name</label>
-            <input
-              type="text"
-              placeholder="e.g. John Doe"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
-          </div>
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-1">Tenant Full Name</label>
+          <input
+            type="text"
+            required
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="e.g. Jane Doe"
+            className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+          />
+        </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Email Address</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Email Address</label>
             <input
               type="email"
-              placeholder="tenant@example.com"
+              required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              placeholder="jane@example.com"
+              className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Phone Number</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">Phone Number</label>
             <input
               type="tel"
-              placeholder="0712345678"
+              required
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+              placeholder="+254 712 345678"
+              className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </div>
         </div>
 
         <button
           type="submit"
-          disabled={loading}
-          className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+          disabled={loading || !selectedUnitId}
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 rounded-lg transition disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          {loading ? <Loader2 className="animate-spin" size={18} /> : <UserPlus size={18} />}
-          Onboard Tenant
+          <Mail size={18} />
+          {loading ? 'Sending Verification Link...' : 'Send Verification Link & Register Tenant'}
         </button>
       </form>
     </div>

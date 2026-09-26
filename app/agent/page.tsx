@@ -7,16 +7,18 @@ import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { createClient } from '@/lib/supabaseClient';
 
-// Import tabs (we will create these step by step)
+// Import local portal tabs
 import { DashboardTab } from './tabs/DashboardTab';
 import { TenantsTab } from './tabs/TenantsTab';
-import { MeterReadingTab } from './tabs/MeterReadingTab';
 import { PaymentsTab } from './tabs/PaymentsTab';
 import { UnassignedPaymentsTab } from './tabs/UnassignedPaymentsTab';
 import { AddTenantTab } from './tabs/AddTenantTab';
-import { GenerateInvoiceTab } from './tabs/GenerateInvoiceTab';
 import { SupportTab } from './tabs/SupportTab';
 import { SettingsTab } from './tabs/SettingsTab';
+
+// Import shared global components from root components directory
+import { MeterReadingTab } from '@/components/MeterReadingTab';
+import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
 
 export default function AgentPortalPage() {
   const [activeTab, setActiveTab] = useState<AgentTab>('dashboard');
@@ -43,6 +45,13 @@ export default function AgentPortalPage() {
           const data = await res.json();
           setProfile(data.profile);
           setProperties(data.properties || []);
+          
+          // Default to the first property or profile's property if none selected
+          if (!selectedPropertyId && data.profile?.assigned_property_id) {
+            setSelectedPropertyId(data.profile.assigned_property_id);
+          } else if (!selectedPropertyId && data.properties?.length > 0) {
+            setSelectedPropertyId(data.properties[0].id);
+          }
         }
 
         // Fetch unassigned payments count for badge
@@ -66,9 +75,9 @@ export default function AgentPortalPage() {
       case 'dashboard':
         return <DashboardTab propertyId={selectedPropertyId} />;
       case 'meter-readings':
-        return <MeterReadingTab propertyId={selectedPropertyId} />;
+        return <MeterReadingTab propertyId={selectedPropertyId} profileId={profile?.id} />;
       case 'generate-invoice':
-        return <GenerateInvoiceTab propertyId={selectedPropertyId} />;
+        return <InvoiceGenerationTab role="agent" propertyId={selectedPropertyId} />;
       case 'add-tenant':
         return <AddTenantTab propertyId={selectedPropertyId} />;
       case 'tenants':

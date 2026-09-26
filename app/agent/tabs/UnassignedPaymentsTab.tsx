@@ -2,140 +2,223 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ShieldAlert, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
-import { createClient } from '@/lib/supabaseClient';
+import { AlertCircle, CheckCircle2, DollarSign, Loader2, Link2 } from 'lucide-react';
+
+export interface UnassignedPayment {
+  id: string;
+  sender_name: string;
+  phone: string;
+  reference: string;
+  amount: number;
+  date: string;
+  property_id?: string;
+  property_name?: string;
+}
+
+interface TenantOption {
+  id: string;
+  full_name: string;
+  unit_number: string;
+}
 
 export const UnassignedPaymentsTab: React.FC<{ propertyId?: string }> = ({ propertyId }) => {
-  const [payments, setPayments] = useState<any[]>([]);
+  const [unassignedPayments, setUnassignedPayments] = useState<UnassignedPayment[]>([]);
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  
+  // Mapping Modal State
+  const [selectedPayment, setSelectedPayment] = useState<UnassignedPayment | null>(null);
+  const [selectedTenantId, setSelectedTenantId] = useState('');
+  const [mappingLoading, setMappingLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const fetchPendingPayments = async () => {
+  const fetchUnassignedPayments = async () => {
     try {
       setLoading(true);
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
-      const headers: Record<string, string> = {};
-      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
-
-      const queryParam = propertyId ? `?property_id=${propertyId}&status=under_review` : '?status=under_review';
-      const res = await fetch(`/agent/api/payments${queryParam}`, { headers, cache: 'no-store' });
+      const queryParam = propertyId ? `?property_id=${propertyId}` : '';
+      const res = await fetch(`/agent/api/unassigned-payments${queryParam}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        setPayments(data.payments || []);
+        setUnassignedPayments(data.payments || []);
+        setTenants(data.tenants || []);
       }
     } catch (err) {
-      console.error('Failed to load pending payments:', err);
+      console.error('Failed to load unassigned payments:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchPendingPayments();
+    fetchUnassignedPayments();
   }, [propertyId]);
 
-  const handleVerify = async (paymentId: string, action: 'approve' | 'reject') => {
+  const handleMapPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPayment || !selectedTenantId) return;
+
+    setMappingLoading(true);
+    setMessage(null);
+
     try {
-      setProcessingId(paymentId);
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`;
-
+      // Updated to match your agent verify-payment API route
       const res = await fetch('/agent/api/verify-payment', {
         method: 'POST',
-        headers,
-        body: JSON.stringify({ payment_id: paymentId, action }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          payment_id: selectedPayment.id,
+          tenant_id: selectedTenantId,
+        }),
       });
 
-      if (!res.ok) throw new Error('Failed to process payment verification');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to verify and map payment.');
 
-      // Refresh list
-      fetchPendingPayments();
+      setMessage({ type: 'success', text: 'Payment verified and mapped successfully!' });
+      setSelectedPayment(null);
+      setSelectedTenantId('');
+      fetchUnassignedPayments(); // Refresh table
     } catch (err: any) {
-      alert(err.message || 'Action failed');
+      setMessage({ type: 'error', text: err.message || 'Error verifying payment.' });
     } finally {
-      setProcessingId(null);
+      setMappingLoading(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="p-12 flex items-center justify-center text-slate-500 gap-2">
-        <Loader2 className="animate-spin text-blue-600" size={20} />
-        <span>Loading unassigned payments queue...</span>
+      <div className="p-12 flex items-center justify-center text-gray-500 gap-2 bg-white rounded-xl border border-gray-200">
+        <Loader2 className="animate-spin text-indigo-600" size={24} />
+        Fetching unassigned payments from database...
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
-        <div>
-          <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <ShieldAlert className="text-amber-600" size={22} />
-            Unassigned / Pending Review Payments
-          </h3>
-          <p className="text-sm text-slate-500 mt-0.5">Verify manual M-Pesa transaction codes submitted by tenants.</p>
+      {message && (
+        <div
+          className={`p-4 rounded-xl border text-sm flex items-center gap-2 ${
+            message.type === 'success'
+              ? 'bg-green-50 border-green-200 text-green-800'
+              : 'bg-red-50 border-red-200 text-red-800'
+          }`}
+        >
+          {message.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+          {message.text}
         </div>
-        <span className="px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-xs font-bold">
-          {payments.length} Pending
-        </span>
-      </div>
+      )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        {payments.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-sm">
-            No pending payments awaiting review.
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+              <DollarSign className="text-amber-500" size={22} />
+              Unassigned Payments
+            </h2>
+            <p className="text-sm text-gray-500">
+              Unassigned payments from tenants attached to assigned property records.
+            </p>
+          </div>
+        </div>
+
+        {unassignedPayments.length === 0 ? (
+          <div className="p-12 text-center text-gray-500 text-sm">
+            <CheckCircle2 size={32} className="mx-auto text-indigo-500 mb-2" />
+            No unassigned payments found for this property. All transactions are cleanly mapped.
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
-            {payments.map((p) => (
-              <div key={p.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-slate-50/50 transition">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono font-bold text-slate-900 text-base">{p.reference}</span>
-                    <span className="px-2.5 py-0.5 bg-amber-100 text-amber-800 rounded-full text-xs font-bold">
-                      Awaiting Audit
-                    </span>
-                  </div>
-                  <div className="text-sm text-slate-700">
-                    Tenant: <strong className="text-slate-900">{p.tenant_name}</strong> (Unit {p.unit_number} — {p.property_name})
-                  </div>
-                  <div className="text-xs text-slate-500">{p.description} &bull; {p.date}</div>
-                </div>
-
-                <div className="flex items-center gap-4 justify-between md:justify-end">
-                  <div className="text-right">
-                    <div className="text-xs text-slate-400 font-medium">Submitted Amount</div>
-                    <div className="text-xl font-bold text-slate-900">KES {(p.amount || 0).toLocaleString()}</div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-500 uppercase">
+                <th className="p-4">Sender / Phone</th>
+                <th className="p-4">Reference No.</th>
+                <th className="p-4">Amount</th>
+                <th className="p-4">Date Received</th>
+                <th className="p-4">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 text-sm">
+              {unassignedPayments.map((pay) => (
+                <tr key={pay.id}>
+                  <td className="p-4 font-medium text-gray-900">
+                    {pay.sender_name || 'Unknown Sender'} 
+                    <span className="block text-xs text-gray-500">{pay.phone || 'No Phone Recorded'}</span>
+                  </td>
+                  <td className="p-4 font-mono text-xs text-gray-600">{pay.reference}</td>
+                  <td className="p-4 font-bold text-indigo-600">
+                    ${pay.amount.toFixed(2)}
+                  </td>
+                  <td className="p-4 text-gray-500">{pay.date}</td>
+                  <td className="p-4">
                     <button
-                      onClick={() => handleVerify(p.id, 'approve')}
-                      disabled={processingId === p.id}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                      onClick={() => {
+                        setSelectedPayment(pay);
+                        setSelectedTenantId('');
+                      }}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5"
                     >
-                      <CheckCircle2 size={14} /> Approve
+                      <Link2 size={14} /> Verify &amp; Map
                     </button>
-                    <button
-                      onClick={() => handleVerify(p.id, 'reject')}
-                      disabled={processingId === p.id}
-                      className="px-4 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-xs font-bold transition flex items-center gap-1.5 disabled:opacity-50"
-                    >
-                      <XCircle size={14} /> Reject
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
+
+      {/* MAP PAYMENT MODAL */}
+      {selectedPayment && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-6">
+            <div>
+              <h3 className="text-lg font-bold text-gray-800">Verify &amp; Map Payment</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                Assign transaction <span className="font-mono text-indigo-700 font-semibold">{selectedPayment.reference}</span> (${selectedPayment.amount.toFixed(2)}) to a tenant.
+              </p>
+            </div>
+
+            <form onSubmit={handleMapPayment} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1 uppercase">
+                  Select Tenant & Unit
+                </label>
+                <select
+                  required
+                  value={selectedTenantId}
+                  onChange={(e) => setSelectedTenantId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                >
+                  <option value="">-- Choose Tenant --</option>
+                  {tenants.map((tenant) => (
+                    <option key={tenant.id} value={tenant.id}>
+                      {tenant.full_name} (Unit {tenant.unit_number})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPayment(null)}
+                  className="px-4 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={mappingLoading || !selectedTenantId}
+                  className="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition disabled:opacity-50"
+                >
+                  {mappingLoading ? 'Verifying...' : 'Confirm Verification'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

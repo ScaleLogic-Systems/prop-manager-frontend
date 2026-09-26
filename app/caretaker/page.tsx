@@ -5,7 +5,6 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, 
-  Gauge, 
   UserPlus, 
   History, 
   Wrench,
@@ -18,7 +17,6 @@ import {
 } from 'lucide-react';
 
 import { DashboardTab } from './tabs/DashboardTab';
-import { MeterReadingTab } from './tabs/MeterReadingTab';
 import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
 import { AddTenantTab } from './tabs/AddTenantTab';
 import { TenantsTab } from './tabs/TenantsTab';
@@ -29,7 +27,6 @@ import CaretakerSettingsTab from './tabs/SettingsTab';
 
 export type CaretakerTab = 
   | 'dashboard' 
-  | 'meter' 
   | 'generate-invoice'
   | 'add-tenant' 
   | 'tenants'
@@ -105,18 +102,6 @@ export default function CaretakerPortalPage() {
             >
               <LayoutDashboard size={18} />
               Dashboard
-            </button>
-
-            <button
-              onClick={() => setActiveTab('meter')}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition ${
-                activeTab === 'meter'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-300 hover:bg-slate-800 hover:text-white'
-              }`}
-            >
-              <Gauge size={18} />
-              Meter Readings
             </button>
 
             <button
@@ -247,12 +232,6 @@ export default function CaretakerPortalPage() {
           <DashboardTab 
             propertyId={profile?.assigned_property_id} 
             propertyName={profile?.assigned_property_name} 
-          />
-        )}
-        {activeTab === 'meter' && (
-          <MeterReadingTab
-            propertyId={profile?.assigned_property_id}
-            profileId={profile?.id}
           />
         )}
         {activeTab === 'generate-invoice' && <InvoiceGenerationTab role="caretaker" />}
