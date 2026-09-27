@@ -5,7 +5,6 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, 
-  Gauge, 
   FileText, 
   UserPlus, 
   Users, 
@@ -30,7 +29,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, unass
 
   const navItems: { id: AgentTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-    { id: 'meter-readings', label: 'Meter Readings', icon: <Gauge size={18} /> },
     { id: 'generate-invoice', label: 'Generate Invoice', icon: <FileText size={18} /> },
     { id: 'add-tenant', label: 'Add Tenant', icon: <UserPlus size={18} /> },
     { id: 'tenants', label: 'Tenants List', icon: <Users size={18} /> },

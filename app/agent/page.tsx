@@ -17,7 +17,6 @@ import { SupportTab } from './tabs/SupportTab';
 import { SettingsTab } from './tabs/SettingsTab';
 
 // Import shared global components from root components directory
-import { MeterReadingTab } from '@/components/MeterReadingTab';
 import { InvoiceGenerationTab } from '@/components/InvoiceGenerationTab';
 
 export default function AgentPortalPage() {
@@ -74,10 +73,8 @@ export default function AgentPortalPage() {
     switch (activeTab) {
       case 'dashboard':
         return <DashboardTab propertyId={selectedPropertyId} />;
-      case 'meter-readings':
-        return <MeterReadingTab propertyId={selectedPropertyId} profileId={profile?.id} />;
       case 'generate-invoice':
-        return <InvoiceGenerationTab role="agent" propertyId={selectedPropertyId} />;
+        return <InvoiceGenerationTab role="agent" propertyId={selectedPropertyId} profileId={profile?.id} />;
       case 'add-tenant':
         return <AddTenantTab propertyId={selectedPropertyId} />;
       case 'tenants':

@@ -1,7 +1,6 @@
 // app/agent/types.ts
 export type AgentTab = 
   | 'dashboard' 
-  | 'meter-readings' 
   | 'generate-invoice' 
   | 'add-tenant' 
   | 'tenants' 

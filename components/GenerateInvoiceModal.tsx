@@ -43,44 +43,6 @@ export function GenerateInvoiceModal({
   const unitsConsumed = Math.max(0, currentReading - previousReading);
   const calculatedWaterTotal = unitsConsumed * ratePerUnit;
 
-  // Dynamic theme mapping based on portal role
-  const getTheme = () => {
-    switch (creatorRole) {
-      case 'agent':
-        return {
-          primaryBg: 'bg-indigo-600 hover:bg-indigo-700',
-          focusRing: 'focus:ring-indigo-500',
-          accentText: 'text-indigo-600',
-          headerIcon: 'text-indigo-400',
-          activeTab: 'bg-indigo-600 text-white border-indigo-600',
-          shadow: 'shadow-indigo-600/20',
-          alertBg: 'bg-indigo-50 border-indigo-200 text-indigo-700',
-        };
-      case 'property_manager':
-        return {
-          primaryBg: 'bg-blue-600 hover:bg-blue-700',
-          focusRing: 'focus:ring-blue-500',
-          accentText: 'text-blue-600',
-          headerIcon: 'text-blue-400',
-          activeTab: 'bg-blue-600 text-white border-blue-600',
-          shadow: 'shadow-blue-600/20',
-          alertBg: 'bg-blue-50 border-blue-200 text-blue-700',
-        };
-      default: // owner / caretaker
-        return {
-          primaryBg: 'bg-emerald-600 hover:bg-emerald-700',
-          focusRing: 'focus:ring-emerald-500',
-          accentText: 'text-emerald-600',
-          headerIcon: 'text-emerald-400',
-          activeTab: 'bg-emerald-600 text-white border-emerald-600',
-          shadow: 'shadow-emerald-600/20',
-          alertBg: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-        };
-    }
-  };
-
-  const theme = getTheme();
-
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -99,6 +61,7 @@ export function GenerateInvoiceModal({
         invoice_type: invoiceType,
         tenant_kra_pin: tenantKraPin,
         tax_type: taxType,
+        property_id: propertyId,
         ...(invoiceType === 'water'
           ? {
               previous_reading: Number(previousReading),
@@ -142,7 +105,7 @@ export function GenerateInvoiceModal({
         {/* Header */}
         <div className="bg-slate-900 px-6 py-4 flex items-center justify-between text-white">
           <div className="flex items-center gap-2">
-            <Receipt className={theme.headerIcon} size={20} />
+            <Receipt className="text-emerald-400" size={20} />
             <h3 className="font-bold text-base">Generate New Invoice</h3>
           </div>
           <button
@@ -161,7 +124,7 @@ export function GenerateInvoiceModal({
             </div>
           )}
           {successMsg && (
-            <div className={`p-3 border text-xs rounded-xl font-medium ${theme.alertBg}`}>
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl font-medium">
               {successMsg}
             </div>
           )}
@@ -177,7 +140,7 @@ export function GenerateInvoiceModal({
                   onClick={() => setInvoiceType(type)}
                   className={`py-2 text-xs font-semibold rounded-xl capitalize transition border ${
                     invoiceType === type
-                      ? theme.activeTab + ' shadow-sm'
+                      ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                       : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                   }`}
                 >
@@ -197,7 +160,7 @@ export function GenerateInvoiceModal({
                 placeholder="e.g. A4"
                 value={unitNumber}
                 onChange={(e) => setUnitNumber(e.target.value)}
-                className={`w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 ${theme.focusRing}`}
+                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
             <div>
@@ -208,7 +171,7 @@ export function GenerateInvoiceModal({
                 placeholder="Full Name"
                 value={tenantName}
                 onChange={(e) => setTenantName(e.target.value)}
-                className={`w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 ${theme.focusRing}`}
+                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
           </div>
@@ -217,7 +180,7 @@ export function GenerateInvoiceModal({
           {invoiceType === 'water' ? (
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
               <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
-                <Calculator size={14} className={theme.accentText} />
+                <Calculator size={14} className="text-emerald-600" />
                 <span>Water Meter Readings</span>
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -257,7 +220,7 @@ export function GenerateInvoiceModal({
               </div>
               <div className="flex justify-between items-center text-xs border-t border-slate-200 pt-2 font-semibold">
                 <span className="text-slate-600">Consumed: {unitsConsumed} units</span>
-                <span className={`text-sm font-extrabold ${theme.accentText}`}>
+                <span className="text-emerald-700 text-sm font-extrabold">
                   KES {calculatedWaterTotal.toLocaleString()}
                 </span>
               </div>
@@ -272,7 +235,7 @@ export function GenerateInvoiceModal({
                 placeholder="e.g. 25000"
                 value={amount}
                 onChange={(e) => setAmount(Number(e.target.value))}
-                className={`w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 ${theme.focusRing}`}
+                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
           )}
@@ -290,7 +253,7 @@ export function GenerateInvoiceModal({
                   placeholder="Optional (e.g. A012345678Z)"
                   value={tenantKraPin}
                   onChange={(e) => setTenantKraPin(e.target.value)}
-                  className={`w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 ${theme.focusRing} uppercase`}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 uppercase"
                 />
               </div>
               <div>
@@ -298,7 +261,7 @@ export function GenerateInvoiceModal({
                 <select
                   value={taxType}
                   onChange={(e) => setTaxType(e.target.value)}
-                  className={`w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 ${theme.focusRing} bg-white`}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                 >
                   <option value="EXEMPT">Exempt (Residential Rent)</option>
                   <option value="B">Standard 16% (Commercial)</option>
@@ -320,7 +283,7 @@ export function GenerateInvoiceModal({
             <button
               type="submit"
               disabled={loading}
-              className={`flex-1 py-2.5 text-xs font-semibold text-white rounded-xl transition flex items-center justify-center gap-2 shadow-md ${theme.primaryBg} ${theme.shadow}`}
+              className="flex-1 py-2.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : 'Generate Invoice'}
             </button>
